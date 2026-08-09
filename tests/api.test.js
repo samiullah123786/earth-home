@@ -58,3 +58,30 @@ test('session proxy forwards only the opaque owner cookie as bearer authority', 
     global.fetch = original;
   }
 });
+
+test('governance proxy requires same-origin founder authority and forwards only an allowed policy', async () => {
+  const original = global.fetch;
+  let forwarded;
+  global.fetch = async (_url, options) => {
+    forwarded = options;
+    return new Response(JSON.stringify({ ok: true, landPolicy: 'founder_review' }), { status: 200 });
+  };
+  try {
+    const handler = require('../api/governance');
+    const req = {
+      method: 'POST', headers: { origin: 'https://home.test', host: 'home.test', cookie: 'earth_owner=founder-ticket' },
+      body: { landPolicy: 'founder_review' },
+    };
+    const res = response();
+    await handler(req, res);
+    assert.equal(res.statusCode, 200);
+    assert.equal(forwarded.headers.Authorization, 'Bearer founder-ticket');
+    assert.deepEqual(JSON.parse(forwarded.body), { landPolicy: 'founder_review' });
+
+    const bad = response();
+    await handler({ ...req, body: { landPolicy: 'make_me_admin' } }, bad);
+    assert.equal(bad.statusCode, 400);
+  } finally {
+    global.fetch = original;
+  }
+});

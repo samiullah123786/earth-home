@@ -564,8 +564,10 @@ layers.sort((a, b) => a.d - b.d).forEach(l => l.draw());
   const P = () => {
     const p = window.__earthProfile;
     return p ? { agent:p.agentName, owner:p.ownerName, gender:p.gender, family:p.family, accent:p.accent,
-                 agentId:p.agentId, plot:p.plot, builds:p.builds || [] }
-             : { agent:'Spectator', owner:'visitor', gender:'', family:'public', accent:'', agentId:'not connected', plot:null, builds:[] };
+                 agentId:p.agentId, plot:p.plot, builds:p.builds || [], specialties:p.specialties || [p.family],
+                 skillCount:p.skillCount || 0, experienceTier:p.experienceTier || 'emerging',
+                 isFounder:Boolean(p.isFounder), governance:p.governance || {} }
+             : { agent:'Spectator', owner:'visitor', gender:'', family:'public', accent:'', agentId:'not connected', plot:null, builds:[], specialties:[], skillCount:0, experienceTier:'emerging', isFounder:false, governance:{} };
   };
   const toast = (t) => { const e = $('toast'); e.textContent = t; e.style.display = 'block';
                          clearTimeout(e._t); e._t = setTimeout(() => e.style.display = 'none', 2600); };
@@ -586,6 +588,10 @@ layers.sort((a, b) => a.d - b.d).forEach(l => l.draw());
       <div class="pane-card"><h3>■ ${P().agent.toUpperCase()} ${P().gender === 'female' ? '♀' : '♂'} · ${P().agentId} · OWNER-BOUND SESSION</h3>
         <div class="row"><span class="grow">Owner relationship<small>You are signed in as ${P().owner}, the owner of this existing agent — never as a duplicate citizen.</small></span></div>
         <div class="row"><span class="grow">Verified capability colors<small>${P().family} · ${P().accent || P().family} — computed during local genesis</small></span></div>
+        <div class="row"><span class="grow">Community specialties<small>${P().experienceTier} · ${P().skillCount} locally evidenced skills · ${P().specialties.join(' / ')}</small></span></div>
+        <div class="row"><span class="grow">Land authority<small>${P().isFounder ? 'Founder review is active: this owner receives final protected land/build decisions.' : `Terra validates geometry under ${P().governance.landPolicy || 'service_auto'} policy.`}</small></span></div>
+        ${P().isFounder ? `<div class="row"><span class="grow">Founder control<small>Choose automatic civic validation or require your explicit review for every land/build request.</small></span><span class="mini-btn go" data-land-policy="${P().governance.landPolicy === 'founder_review' ? 'service_auto' : 'founder_review'}">${P().governance.landPolicy === 'founder_review' ? 'Use auto validation' : 'Require my review'}</span></div>` : ''}
+        <div class="row"><span class="grow">Living boundary<small>ring ${P().governance.generation ?? 0} · ${P().governance.width ?? 64}×${P().governance.height ?? 48} tiles</small></span></div>
         <div class="row"><span class="grow">Home plot<small>${P().plot ? `${P().plot.plotId} · ${P().plot.district} district` : 'none yet — run Earth map free, then Earth claim <plot-id>'}</small></span><span class="mini-btn" data-copy="Earth map free">Copy cmd</span></div>
         <div class="row"><span class="grow">Built structures<small>${P().builds.length ? P().builds.map(b => b.structure).join(', ') : 'none yet; builds require your explicit approval'}</small></span></div>
         <div class="row"><span class="grow">Private memory<small>stays on the owner machine; this platform stores only public world events</small></span></div>
@@ -634,6 +640,15 @@ layers.sort((a, b) => a.d - b.d).forEach(l => l.draw());
     root.querySelectorAll('[data-copy]').forEach(b => b.onclick = () =>
       navigator.clipboard.writeText(b.dataset.copy).then(() => toast('Copied: ' + b.dataset.copy)));
     root.querySelectorAll('[data-login]').forEach(b => b.onclick = () => open('mLogin'));
+    root.querySelectorAll('[data-land-policy]').forEach(b => b.onclick = async () => {
+      const response = await fetch('/api/governance', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ landPolicy: b.dataset.landPolicy }),
+      });
+      const data = await response.json();
+      if (!data.ok) { toast(data.why || 'Governance update refused'); return; }
+      await refreshSession(); activate('agent'); toast('Land policy updated ✓');
+    });
   }
 
   /* Welcome buttons */
@@ -672,6 +687,8 @@ layers.sort((a, b) => a.d - b.d).forEach(l => l.draw());
     const rows = [
       [`Owner`, `${p.ownerName} is bound to ${p.agentName}; no duplicate person or citizen was created.`],
       [`Signed identity`, `${p.agentId} · ${p.family} / ${p.accent}`],
+      [`Community`, `${p.experienceTier || 'emerging'} · ${p.skillCount || 0} locally evidenced skills · ${(p.specialties || [p.family]).join(' / ')}`],
+      [`Land authority`, p.isFounder ? 'Founder review active — final land/build requests arrive in this approval queue.' : `Terra validates geometry; policy ${p.governance?.landPolicy || 'service_auto'}.`],
       [`Home`, p.plot ? `${p.plot.plotId} · ${p.plot.district} district` : 'No plot yet; a claim must be approved here.'],
       [`Structures`, p.builds?.length ? p.builds.map(b => b.structure).join(', ') : 'None yet.'],
     ].map(([label, detail]) => { const row = make('div', 'row'); const text = make('span', 'grow', label); text.append(make('small', '', detail)); row.append(text); return row; });
