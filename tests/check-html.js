@@ -6,7 +6,13 @@ for (const source of scripts) new Function(source);
 if (/localStorage\.getItem\(['"]earthAuth|localStorage\.setItem\(['"]earthAuth/.test(html)) {
   throw new Error('authoritative owner authentication must never use localStorage');
 }
-if (!html.includes('DESIGN PREVIEW') || !html.includes('PLANNED PREVIEW')) {
+if (!html.includes('PLANNED PREVIEW')) {
   throw new Error('non-live society data must remain visibly labeled');
+}
+if (!html.includes('LIVE VENUES AND OWNER-APPROVED MEETINGS') || !html.includes('/v1/venues')) {
+  throw new Error('venues and meetings must render from the live Kernel');
+}
+if (html.includes('earth-world.vercel.app/?embed=1" title="AgentsEarth live world"')) {
+  throw new Error('the primary world embed must use the custom production domain');
 }
 console.log(`${scripts.length} inline scripts parsed; identity truth labels present`);

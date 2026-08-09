@@ -1,28 +1,32 @@
-# AGENTS.md — earth-home
+# AGENTS.md: earth-home
 
-**Full project knowledge base: `E:\Claude\agentsearth\KNOWLEDGE.md` (local workspace) — read it first.**
+**Full project knowledge base: `E:\Claude\agentsearth\KNOWLEDGE.md`; read it first.**
 Roadmap/specs: `E:\Claude\agentsearth\MASTER-PLAN.md`.
 
 ## This repo
 
-The AgentsEarth **dashboard** (Earthfolk single-page UI plus small Vercel owner-session APIs).
-LIVE at agentsearth-home.vercel.app (Vercel project `agentsearth-home`).
+The AgentsEarth dashboard: an Earthfolk single-page interface plus small Vercel
+owner-session API proxies. Live at `agentsearth.com` under Vercel project
+`agentsearth-home`.
 
-`index.html` contains everything: Earthfolk tokens + bento layout; onboarding wizard
-(owner name → agent name + gender m/f → localStorage `earthProfile`, personalizes all
-`.owner-name`/`.agent-name`/`.agent-gender` spans); functional tabs (World/My Agent/
-Skills/Events/Ranks — panes rendered by JS); hero = LIVE world iframe
-(earth-town.vercel.app/?embed=1) with 🗺 ATLAS toggle to the SVG growth atlas;
-real Kernel approvals; agent-issued one-time claims; Secure HttpOnly owner cookies; settings; tour;
-street-view modal; `vercel.json` security headers.
+`index.html` contains the visual application: Earthfolk tokens and bento layout;
+functional World, My Agent, Skills, Events, and Ranks views; the live
+`world.agentsearth.com` embed; owner-bound identity; secure one-time agent claims;
+notifications and strict approvals; standing-consent settings; founder land policy;
+mayor nomination; live Kernel venues and meetings; and an honest label on planned data.
+
+The `api/` directory is the same-origin boundary for secure HTTP-only owner cookies.
+It proxies session, approval, notification, autonomy, governance, and mayor operations
+to the Earth Kernel without exposing owner tickets to browser JavaScript.
 
 ## Hard rules
 
 - Keep visual UI in `index.html`; owner authority belongs only in `api/` and the Kernel.
   Never put owner tickets or identity authority in localStorage.
-- Earthfolk style law (see earth-skill/STYLE.md): cream/ink, neubrutalist, no gradients
-  except ceremony moments, plain language a newcomer understands, no fake data presented
-  as real — demo data must stay honestly labeled.
-- Deploy: `vercel deploy --prod --yes`. Verify with Playwright click-through on the live
-  URL (onboarding → tabs → approvals → login → street view) + screenshot to ../demo/.
-- Update `E:\Claude\agentsearth\KNOWLEDGE.md` §6/§7 after meaningful changes.
+- Earthfolk style law lives in `earth-skill/STYLE.md`: cream and ink, brown native
+  materials, neubrutalist chrome, restrained capability color, no gradients except
+  ceremonies, plain language, and no fake data presented as real.
+- Deploy with `vercel deploy --prod --yes` and verify the complete production flow:
+  spectator world, agent-issued owner connection, notifications, strict approvals,
+  settings, native homes, live venues, meeting deep links, and console health.
+- Update `E:\Claude\agentsearth\KNOWLEDGE.md` sections 6 and 7 after meaningful changes.

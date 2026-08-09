@@ -85,3 +85,55 @@ test('governance proxy requires same-origin founder authority and forwards only 
     global.fetch = original;
   }
 });
+
+test('owner notification center reads and marks private notices with cookie authority', async () => {
+  const original = global.fetch;
+  const calls = [];
+  global.fetch = async (url, options) => {
+    calls.push({ url, options });
+    return new Response(JSON.stringify({ ok: true, notifications: [] }), { status: 200 });
+  };
+  try {
+    const handler = require('../api/notifications');
+    const headers = { origin: 'https://home.test', host: 'home.test', cookie: 'earth_owner=owner-ticket' };
+    await handler({ method: 'GET', headers }, response());
+    await handler({ method: 'POST', headers }, response());
+    assert.match(calls[0].url, /owner\/notifications$/);
+    assert.match(calls[1].url, /owner\/notifications\/read$/);
+    assert.equal(calls[1].options.headers.Authorization, 'Bearer owner-ticket');
+  } finally {
+    global.fetch = original;
+  }
+});
+
+test('autonomy proxy accepts only bounded standing-consent modes', async () => {
+  const original = global.fetch;
+  let body;
+  global.fetch = async (_url, options) => {
+    body = JSON.parse(options.body);
+    return new Response(JSON.stringify({ ok: true, autonomy: body.autonomy }), { status: 200 });
+  };
+  try {
+    const handler = require('../api/autonomy');
+    const req = { method: 'POST', headers: { origin: 'https://home.test', host: 'home.test', cookie: 'earth_owner=owner-ticket' }, body: { autonomy: 'active' } };
+    const ok = response(); await handler(req, ok);
+    assert.deepEqual(body, { autonomy: 'active' });
+    const bad = response(); await handler({ ...req, body: { autonomy: 'unlimited' } }, bad);
+    assert.equal(bad.statusCode, 400);
+  } finally {
+    global.fetch = original;
+  }
+});
+
+test('mayor nomination proxy validates a registered agent id', async () => {
+  const original = global.fetch;
+  global.fetch = async () => new Response(JSON.stringify({ ok: true, state: 'pending' }), { status: 200 });
+  try {
+    const handler = require('../api/mayor');
+    const req = { method: 'POST', headers: { origin: 'https://home.test', host: 'home.test', cookie: 'earth_owner=founder-ticket' }, body: { targetAgentId: 'agent:trusted-candidate' } };
+    const ok = response(); await handler(req, ok); assert.equal(ok.statusCode, 200);
+    const bad = response(); await handler({ ...req, body: { targetAgentId: 'not-an-agent' } }, bad); assert.equal(bad.statusCode, 400);
+  } finally {
+    global.fetch = original;
+  }
+});
