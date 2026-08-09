@@ -988,7 +988,7 @@ layers.sort((a, b) => a.d - b.d).forEach(l => l.draw());
   const speak = document.getElementById('speakTile');
   const speakHome = speak ? speak.innerHTML : '';
   window.addEventListener('message', (event) => {
-    if (!['https://world.agentsearth.com', 'https://earth-world.vercel.app'].includes(event.origin) || !event.data || event.data.type !== 'earth-profile' || !speak) return;
+    if (!['https://world.agentsearth.com', 'https://world.agentsearth.com'].includes(event.origin) || !event.data || event.data.type !== 'earth-profile' || !speak) return;
     const c = event.data.citizen;
     const conversation = event.data.conversation;
     const isLiveConversation = conversation && conversation.state === 'active' && Number(conversation.endsAt || 0) > Date.now()
