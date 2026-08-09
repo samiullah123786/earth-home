@@ -152,9 +152,7 @@
   <div class="tile world">
     <iframe id="worldLive" src="https://earth-world.vercel.app/?embed=1" title="AgentsEarth live world"
             style="width:100%;height:100%;border:0;display:block" loading="eager"></iframe>
-    <svg id="worldAtlas" viewBox="0 0 800 500" preserveAspectRatio="xMidYMid slice" style="display:none"><g id="w"></g></svg>
     <a class="hud enter" href="https://earth-world.vercel.app" target="_blank" rel="noopener">⛶ FULL VIEW</a>
-    <div class="hud enter" id="btnAtlas" style="top:98px;background:var(--design)">🗺 ATLAS</div>
   </div>
 
   <!-- ══ MY AGENT ══ -->
@@ -648,16 +646,7 @@ layers.sort((a, b) => a.d - b.d).forEach(l => l.draw());
   btns[0].onclick = () => window.__earthProfile ? loadApprovals(true) : open('mLogin');
   btns[1].onclick = () => open('mStreet');
   btns[2].onclick = () => startTour();
-  /* Atlas toggle: live map (default) <-> growth atlas */
-  const btnAtlas = document.getElementById('btnAtlas');
-  btnAtlas.onclick = () => {
-    const live = document.getElementById('worldLive'), atlas = document.getElementById('worldAtlas');
-    const showAtlas = atlas.style.display === 'none';
-    atlas.style.display = showAtlas ? '' : 'none';
-    live.style.display = showAtlas ? 'none' : 'block';
-    btnAtlas.textContent = showAtlas ? '🌍 LIVE MAP' : '🗺 ATLAS';
-  };
-
+  
   /* Real owner-bound identity and approvals */
   let approvals = [];
   const authBtn = $('btnAuth');
