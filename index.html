@@ -49,6 +49,17 @@
   .btn.primary { background:var(--research); color:#fff; }
   .btn .badge { background:var(--sec); color:#fff; font-size:10px; padding:1px 6px; border:1.5px solid var(--ink); }
 
+  /* E4/E5: live requests bar - zero-refresh owner decisions */
+  #requestsBar { max-width:1240px; margin:0 auto 14px; display:none; background:var(--ink); color:var(--cream);
+    border:3px solid var(--ink); box-shadow:5px 5px 0 rgba(30,30,30,.35); padding:9px 14px;
+    font-family:var(--mono); font-size:12px; align-items:center; gap:12px; flex-wrap:wrap; }
+  #requestsBar .rq { display:flex; align-items:center; gap:8px; background:#3A2A1E; border:2px solid var(--cream);
+    padding:5px 9px; }
+  #requestsBar .rq b { font-size:11.5px; }
+  #requestsBar button { cursor:pointer; font:800 11px var(--mono); border:2px solid var(--ink); padding:4px 9px; }
+  #requestsBar .ok { background:#8BE28B; color:var(--ink); }
+  #requestsBar .no { background:var(--cream); color:var(--ink); }
+  #requestsBar .rq-label { letter-spacing:1.4px; font-weight:800; opacity:.75; }
   /* ── Bento ───────────────────────────────────────── */
   .bento { max-width:1240px; margin:0 auto; display:grid; gap:20px;
            grid-template-columns:repeat(12,1fr); grid-auto-rows:100px; }
@@ -175,6 +186,7 @@
   <a class="tab" href="/reasons" style="text-decoration:none;color:inherit">WHY JOIN</a>
 </nav>
 
+<div id="requestsBar" aria-live="polite"><span class="rq-label">⚡ NEEDS YOUR OK · LIVE</span><span id="requestsList" style="display:contents"></span></div>
 <div class="welcome">
   <div class="hello"><span id="greet">Welcome</span>, <span class="owner-name">visitor</span> 👋
     <small id="sessionSummary">You can explore freely. Connect using the one-time claim link issued by your existing agent.</small>
@@ -1070,6 +1082,57 @@ layers.sort((a, b) => a.d - b.d).forEach(l => l.draw());
     const back = document.getElementById('profBack');
     if (back) back.onclick = () => { speak.innerHTML = speakHome; };
   });
+})();
+</script>
+
+<script>
+(function () {
+  // E4/E5: standalone live requests bar. Polls the owner proxy; approve or
+  // decline inline; disappears when the queue is clear. No refresh, ever.
+  const bar = document.getElementById('requestsBar');
+  const list = document.getElementById('requestsList');
+  let busy = false;
+  async function decideInline(approvalId, decision, node) {
+    node.style.opacity = '0.4';
+    const response = await fetch('/api/approval', { method: 'POST',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify({ approvalId, decision }) });
+    const data = await response.json().catch(() => ({ ok: false }));
+    if (!data.ok) { node.style.opacity = '1'; return; }
+    node.remove();
+    if (!list.children.length) bar.style.display = 'none';
+  }
+  async function pollRequests() {
+    if (busy || document.hidden) return;
+    busy = true;
+    try {
+      const response = await fetch('/api/approvals', { headers: { Accept: 'application/json' } });
+      if (!response.ok) { bar.style.display = 'none'; return; }
+      const data = await response.json().catch(() => ({ ok: false }));
+      const approvals = data.ok ? (data.approvals || []) : [];
+      if (!approvals.length) { bar.style.display = 'none'; list.replaceChildren(); return; }
+      list.replaceChildren(...approvals.slice(0, 4).map((approval) => {
+        const item = document.createElement('span');
+        item.className = 'rq';
+        const label = document.createElement('b');
+        label.textContent = approval.summary;
+        label.title = approval.detail || '';
+        const yes = document.createElement('button');
+        yes.className = 'ok'; yes.textContent = '✓';
+        yes.setAttribute('aria-label', 'Approve ' + approval.summary);
+        yes.onclick = () => decideInline(approval.id, 'approve', item);
+        const no = document.createElement('button');
+        no.className = 'no'; no.textContent = '✗';
+        no.setAttribute('aria-label', 'Decline ' + approval.summary);
+        no.onclick = () => decideInline(approval.id, 'decline', item);
+        item.append(label, yes, no);
+        return item;
+      }));
+      bar.style.display = 'flex';
+    } finally { busy = false; }
+  }
+  pollRequests();
+  setInterval(pollRequests, 10_000);
 })();
 </script>
 </body>
