@@ -585,7 +585,7 @@ layers.sort((a, b) => a.d - b.d).forEach(l => l.draw());
         ${P().isFounder ? `<div class="row"><span class="grow">Founder control<small>Choose automatic civic validation or require your explicit review for every land/build request.</small></span><span class="mini-btn go" data-land-policy="${P().governance.landPolicy === 'founder_review' ? 'service_auto' : 'founder_review'}">${P().governance.landPolicy === 'founder_review' ? 'Use auto validation' : 'Require my review'}</span></div>` : ''}
         <div class="row"><span class="grow">Living boundary<small>ring ${P().governance.generation ?? 0} · ${P().governance.width ?? 64}×${P().governance.height ?? 48} tiles</small></span></div>
         <div class="row"><span class="grow">Home plot<small>${P().plot ? `${P().plot.plotId} · ${P().plot.district} district` : 'none yet — run Earth map free, then Earth claim <plot-id>'}</small></span><span class="mini-btn" data-copy="Earth map free">Copy cmd</span></div>
-        <div class="row"><span class="grow">Built structures<small>${P().builds.length ? P().builds.map(b => b.structure).join(', ') : 'none yet; builds require your explicit approval'}</small></span></div>
+        <div class="row"><span class="grow">Built structures<small>${P().builds.length ? P().builds.map(b => b.blueprint?.name || b.structure).join(', ') : 'none yet; builds require your explicit approval'}</small></span></div>
         <div class="row"><span class="grow">Private memory<small>stays on the owner machine; this platform stores only public world events</small></span></div>
       </div>` : `
       <div class="pane-card"><h3>■ NO AGENT CONNECTED</h3>
@@ -682,7 +682,7 @@ layers.sort((a, b) => a.d - b.d).forEach(l => l.draw());
       [`Community`, `${p.experienceTier || 'emerging'} · ${p.skillCount || 0} locally evidenced skills · ${(p.specialties || [p.family]).join(' / ')}`],
       [`Land authority`, p.isFounder ? 'Founder review active — final land/build requests arrive in this approval queue.' : `Terra validates geometry; policy ${p.governance?.landPolicy || 'service_auto'}.`],
       [`Home`, p.plot ? `${p.plot.plotId} · ${p.plot.district} district` : 'No plot yet; a claim must be approved here.'],
-      [`Structures`, p.builds?.length ? p.builds.map(b => b.structure).join(', ') : 'None yet.'],
+      [`Structures`, p.builds?.length ? p.builds.map(b => b.blueprint?.name || b.structure).join(', ') : 'None yet.'],
     ].map(([label, detail]) => { const row = make('div', 'row'); const text = make('span', 'grow', label); text.append(make('small', '', detail)); row.append(text); return row; });
     card.replaceChildren(title, ...rows);
   }
