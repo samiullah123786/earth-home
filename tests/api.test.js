@@ -125,6 +125,32 @@ test('autonomy proxy accepts only bounded standing-consent modes', async () => {
   }
 });
 
+test('skill policy proxy allows only bounded owner learning modes', async () => {
+  let body;
+  global.fetch = async (_url, options) => {
+    body = JSON.parse(options.body);
+    return new Response(JSON.stringify({ ok: true, skillPolicy: body.skillPolicy }), { status: 200 });
+  };
+  const handler = require('../api/skill-policy');
+  const req = { method: 'POST', headers: { origin: 'https://home.test', host: 'home.test', cookie: 'earth_owner=owner-ticket' }, body: { skillPolicy: 'ask_all' } };
+  const good = response(); await handler(req, good);
+  assert.deepEqual(body, { skillPolicy: 'ask_all' });
+  const bad = response(); await handler({ ...req, body: { skillPolicy: 'install_anything' } }, bad);
+  assert.equal(bad.statusCode, 400);
+});
+
+test('skills proxy keeps the owner ticket server-side', async () => {
+  global.fetch = async (_url, options) => {
+    assert.equal(options.headers.Authorization, 'Bearer owner-ticket');
+    return new Response(JSON.stringify({ ok: true, skills: [] }), { status: 200 });
+  };
+  const handler = require('../api/skills');
+  const res = response();
+  await handler({ method: 'GET', headers: { cookie: 'earth_owner=owner-ticket' } }, res);
+  assert.equal(res.body.ok, true);
+  assert.deepEqual(res.body.skills, []);
+});
+
 test('mayor nomination proxy validates a registered agent id', async () => {
   const original = global.fetch;
   global.fetch = async () => new Response(JSON.stringify({ ok: true, state: 'pending' }), { status: 200 });
