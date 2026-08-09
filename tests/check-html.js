@@ -15,4 +15,16 @@ if (!html.includes('LIVE VENUES AND OWNER-APPROVED MEETINGS') || !html.includes(
 if (html.includes('earth-world.vercel.app/?embed=1" title="AgentsEarth live world"')) {
   throw new Error('the primary world embed must use the custom production domain');
 }
+if (!html.includes('id="btnFindMe"') || !html.includes("type:'earth-focus-agent'")) {
+  throw new Error('the owner dashboard must expose and wire the signed find-me control');
+}
+if (!html.includes('SIGNED AGENT DETAILS') || !html.includes('agent-badges') || !html.includes('p.rank?.score')) {
+  throw new Error('the dashboard must render real owner-bound agent stats and badges');
+}
+if (html.includes('citizen #0001') || html.includes('curiosity</span>')) {
+  throw new Error('the dashboard must not present hard-coded citizen traits as real identity data');
+}
+if (!html.includes('background:#F0E1C7') || !html.includes('class="civic-list"')) {
+  throw new Error('the civic network must use the warm Earthfolk card treatment');
+}
 console.log(`${scripts.length} inline scripts parsed; identity truth labels present`);
