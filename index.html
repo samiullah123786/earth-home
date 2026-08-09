@@ -100,6 +100,11 @@
   .xchg .es { color:#FFD98A; }
   .xchg .card { color:#9EC9FF; }
   .xchg .human { color:var(--cream); opacity:.85; }
+  .world-talk { margin-top:8px; border-top:2px solid var(--ink); padding-top:7px; }
+  .world-talk summary { cursor:pointer; font-weight:800; color:var(--cream); list-style:none; }
+  .world-talk summary::-webkit-details-marker { display:none; }
+  .world-talk summary::after { content:'MINIMIZE'; float:right; font-size:9px; opacity:.55; }
+  .world-talk:not([open]) summary::after { content:'OPEN'; }
 
   /* ── Feed / board / child ────────────────────────── */
   .event { display:flex; gap:10px; padding:8px 0; border-bottom:2px solid #EFE6D5;
@@ -986,9 +991,11 @@ layers.sort((a, b) => a.d - b.d).forEach(l => l.draw());
     if (!['https://world.agentsearth.com', 'https://earth-world.vercel.app'].includes(event.origin) || !event.data || event.data.type !== 'earth-profile' || !speak) return;
     const c = event.data.citizen;
     const conversation = event.data.conversation;
-    const transcript = conversation && Array.isArray(conversation.lines)
-      ? `<div style="margin-top:8px;border-top:2px solid var(--ink);padding-top:7px"><span class="lbl">talk</span><b>${esc(conversation.aName)} with ${esc(conversation.bName)}</b>${conversation.lines.map(line => `<div class="human" style="margin-top:5px">${esc(line.gloss)}</div>`).join('')}</div>`
-      : '<div><span class="lbl">talk</span><span class="human">No public conversation recorded yet.</span></div>';
+    const isLiveConversation = conversation && conversation.state === 'active' && Number(conversation.endsAt || 0) > Date.now()
+      && Array.isArray(conversation.lines);
+    const transcript = isLiveConversation
+      ? `<details class="world-talk" open><summary>WORLD TALK · ${esc(conversation.aName)} WITH ${esc(conversation.bName)}</summary>${conversation.lines.map(line => `<div class="human" style="margin-top:5px">${esc(line.gloss)}</div>`).join('')}</details>`
+      : '';
     speak.innerHTML = `
       <h2><span class="dot" style="background:${FAM[c.family] || '#64748B'}"></span> CITIZEN PROFILE
         <span style="margin-left:auto;cursor:pointer" id="profBack">✕</span></h2>
