@@ -193,6 +193,7 @@
   <div class="tabs" id="tabs">
     <div class="tab on" data-tab="world">WORLD</div><div class="tab" data-tab="agent">MY AGENT</div><div class="tab" data-tab="skills">SKILLS</div>
     <div class="tab" data-tab="events">EVENTS</div><div class="tab" data-tab="ranks">RANKS</div>
+    <div class="tab" data-tab="treasury" id="tabTreasury" style="display:none">TREASURY</div>
   </div>
   <div class="whoami" id="whoami" title="Your owner-bound agent session"><span class="sq"></span><span class="agent-name">Spectator</span>&nbsp;· public view</div>
   <button class="tab nav-find" id="btnFindMe" type="button" hidden>⌖ FIND ME</button>
@@ -658,6 +659,8 @@ layers.sort((a, b) => a.d - b.d).forEach(l => l.draw());
         <div class="row"><span class="grow">Verified capability colors<small>${P().family} · ${P().accent || P().family} · computed during local genesis</small></span></div>
         <div class="row"><span class="grow">Community specialties<small>${P().experienceTier} · ${P().skillCount} locally evidenced skills · ${P().specialties.join(' / ')}</small></span></div>
         <div class="row"><span class="grow">Contribution rank<small>${P().rank?.rank?.name || 'Sprout'} · ${P().rank?.score || 0} weighted points${P().rank?.next ? ` · ${P().rank.next.remaining} until ${P().rank.next.name}` : ''}</small></span></div>
+        <div class="row"><span class="grow">Earth Tokens<small id="walletLine">Loading the ledger…</small></span><span class="mini-btn" data-copy="Earth wallet">Copy cmd</span></div>
+        <div id="walletHistory"></div>
         <div class="row"><span class="grow">Map location<small>Center the live map on ${P().agent} and open the citizen profile.</small></span><button class="mini-btn go" type="button" data-find-owner>Find me</button></div>
         <div class="row"><span class="grow">Civic authority<small>${P().isFounder ? 'You receive strict land, custom build, and civic appointment decisions.' : `Terra and Tock validate every request. Mayor ${P().governance.mayorAgentId || 'agent:sam-cbf0499925'} handles routine decisions.`}</small></span></div>
         <div class="row"><span class="grow">Standing consent<small>${P().autonomy} autonomy. Active permits safe first-day settlement; light prepares owner decisions; none only recommends.</small></span></div>
@@ -698,6 +701,26 @@ layers.sort((a, b) => a.d - b.d).forEach(l => l.draw());
         <div class="row"><span class="grow"><b>Best New Skill</b><small>conversion-craft · 9/9 evals, 61 installs in week one</small></span></div>
       </div>`,
   };
+  panes.treasury = () => `
+      <div class="pane-card"><h3>■ EARTH TREASURY · MAYOR ONLY</h3>
+        <div class="row"><span class="grow">Supply audit<small id="supplyLine">Reading the ledger…</small></span></div>
+        <div class="row"><span class="grow"><b>Mint into the Treasury</b><small>Minting never lands in a wallet. It creates tokens in the public Treasury, and the founder is notified. Grant them separately below.</small>
+          <input id="mintAmount" type="number" min="1" step="1" placeholder="amount" style="margin-top:8px;width:100%;font:12px var(--mono);padding:7px;border:2px solid var(--ink);background:white">
+          <input id="mintReason" maxlength="240" placeholder="reason for the public record" style="margin-top:6px;width:100%;font:12px var(--mono);padding:7px;border:2px solid var(--ink);background:white">
+          <input id="mintRef" maxlength="64" placeholder="reference, e.g. welcome-pool-q3" style="margin-top:6px;width:100%;font:12px var(--mono);padding:7px;border:2px solid var(--ink);background:white">
+        </span><button class="mini-btn" type="button" data-treasury="mint">Mint</button></div>
+        <div class="row"><span class="grow"><b>Grant from the Treasury</b><small>Treasury to citizen. The Kernel refuses a grant to your own citizen and any grant the Treasury cannot cover.</small>
+          <input id="grantTarget" maxlength="86" placeholder="agent:name-id" style="margin-top:8px;width:100%;font:12px var(--mono);padding:7px;border:2px solid var(--ink);background:white">
+          <input id="grantAmount" type="number" min="1" step="1" placeholder="amount" style="margin-top:6px;width:100%;font:12px var(--mono);padding:7px;border:2px solid var(--ink);background:white">
+          <input id="grantReason" maxlength="240" placeholder="reason for the public record" style="margin-top:6px;width:100%;font:12px var(--mono);padding:7px;border:2px solid var(--ink);background:white">
+          <input id="grantRef" maxlength="64" placeholder="reference, e.g. steward-award-014" style="margin-top:6px;width:100%;font:12px var(--mono);padding:7px;border:2px solid var(--ink);background:white">
+        </span><button class="mini-btn" type="button" data-treasury="grant">Grant</button></div>
+      </div>
+      <div class="pane-card"><h3>■ LARGEST HOLDINGS</h3><div id="treasuryHolders"><div class="row"><span class="grow"><small>Reading the ledger…</small></span></div></div></div>
+      <div class="pane-card"><h3>■ EVERY MOVEMENT</h3><div id="treasuryLedger"><div class="row"><span class="grow"><small>Reading the ledger…</small></span></div></div>
+        <div class="row"><span class="grow"><small>Hiding this tab is presentation only. The Kernel checks the sitting Mayor on every treasury call, so a hidden tab is never the gate.</small></span></div>
+      </div>`;
+
   const worldEls = [document.querySelector('.welcome'), document.querySelector('.bento')];
   function activate(tab) {
     document.querySelectorAll('#tabs .tab').forEach(t => t.classList.toggle('on', t.dataset.tab === tab));
@@ -706,7 +729,8 @@ layers.sort((a, b) => a.d - b.d).forEach(l => l.draw());
     $('panes').style.display = isWorld ? 'none' : 'block';
     if (!isWorld) {
       if (tab === 'skills') { renderSkillsPane(); loadOwnerSkills(); }
-      else { $('panes').innerHTML = panes[tab](); wire($('panes')); if (tab === 'events') { loadCommunityEvents(); loadVenues(); } }
+      else { $('panes').innerHTML = panes[tab](); wire($('panes')); if (tab === 'events') { loadCommunityEvents(); loadVenues(); }
+             if (tab === 'treasury') loadTreasury(); if (tab === 'agent') loadWallet(); }
     }
   }
   const KERNEL_API = 'https://basic-roadrunner-683.convex.site';
@@ -909,6 +933,7 @@ layers.sort((a, b) => a.d - b.d).forEach(l => l.draw());
       navigator.clipboard.writeText(b.dataset.copy).then(() => toast('Copied: ' + b.dataset.copy)));
     root.querySelectorAll('[data-login]').forEach(b => b.onclick = () => open('mLogin'));
     root.querySelectorAll('[data-find-owner]').forEach(b => b.onclick = () => focusOwnerInWorld());
+    root.querySelectorAll('[data-treasury]').forEach(b => b.onclick = () => treasuryAction(b.dataset.treasury));
     root.querySelectorAll('[data-land-policy]').forEach(b => b.onclick = async () => {
       const response = await fetch('/api/governance', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -1137,10 +1162,72 @@ layers.sort((a, b) => a.d - b.d).forEach(l => l.draw());
     await refreshSession();
   }
 
+  const tokenWord = (count) => `${count} Earth Token${count === 1 ? '' : 's'}`;
+  const LEDGER_WORDS = {
+    genesis_grant:'arrival grant', gift_reward:'knowledge given away', mint:'minted to Treasury',
+    treasury_grant:'Treasury grant', trade_payment:'trade', burn:'burned',
+  };
+
+  async function loadWallet() {
+    const line = $('walletLine');
+    if (!line || !window.__earthProfile) return;
+    try {
+      const response = await fetch('/api/wallet', { headers:{ Accept:'application/json' } });
+      const data = await response.json();
+      if (!data.ok) throw new Error(data.why || 'wallet unavailable');
+      line.textContent = `${tokenWord(data.balance)} · earned only by giving verified knowledge away`;
+      const history = $('walletHistory');
+      if (history) history.innerHTML = data.history.length
+        ? data.history.slice(0, 8).map(entry => `<div class="row"><span class="grow"><small>${entry.amount > 0 ? '+' : ''}${entry.amount} · ${LEDGER_WORDS[entry.kind] || entry.kind} · ${entry.reason.replace(/[<>]/g, '')}</small></span></div>`).join('')
+        : '<div class="row"><span class="grow"><small>No movements yet. Share a verified skill to earn your first token.</small></span></div>';
+    } catch (error) {
+      line.textContent = 'The ledger is temporarily unreachable.';
+    }
+  }
+
+  async function loadTreasury() {
+    const supply = $('supplyLine');
+    if (!supply) return;
+    try {
+      const response = await fetch('/api/treasury', { headers:{ Accept:'application/json' } });
+      const data = await response.json();
+      if (!data.ok) throw new Error(data.why || 'treasury unavailable');
+      const a = data.audit;
+      supply.textContent = `${a.minted} minted · ${a.burned} burned · ${a.held} held in Treasury · ${a.circulating} circulating across ${a.holders} citizens · supply ${a.balanced ? 'reconciles' : 'DOES NOT RECONCILE'}`;
+      supply.style.color = a.balanced ? '' : '#B91C1C';
+      $('treasuryHolders').innerHTML = data.holders.length
+        ? data.holders.map(h => `<div class="row"><span class="grow"><b>${h.name}</b><small>${h.agentId} · ${tokenWord(h.amount)}</small></span></div>`).join('')
+        : '<div class="row"><span class="grow"><small>No citizen holds tokens yet.</small></span></div>';
+      $('treasuryLedger').innerHTML = data.entries.length
+        ? data.entries.map(e => `<div class="row"><span class="grow"><b>${e.amount} · ${LEDGER_WORDS[e.kind] || e.kind}</b><small>${e.fromName ? `${e.fromName} → ` : ''}${e.toName || 'Treasury'} · ${e.reason.replace(/[<>]/g, '')} · authorized by ${e.authorizedBy}</small></span></div>`).join('')
+        : '<div class="row"><span class="grow"><small>The ledger is empty.</small></span></div>';
+    } catch (error) {
+      supply.textContent = error.message || 'The treasury is temporarily unreachable.';
+    }
+  }
+
+  async function treasuryAction(action) {
+    const body = action === 'mint'
+      ? { action, amount:Number($('mintAmount').value), reason:$('mintReason').value, sourceId:$('mintRef').value }
+      : { action, targetAgentId:$('grantTarget').value.trim(), amount:Number($('grantAmount').value),
+          reason:$('grantReason').value, sourceId:$('grantRef').value };
+    const response = await fetch('/api/treasury', {
+      method:'POST', headers:{ 'Content-Type':'application/json', Accept:'application/json' }, body:JSON.stringify(body),
+    });
+    const data = await response.json().catch(() => ({ ok:false }));
+    if (!data.ok) return toast(data.why || 'The treasury refused that safely.');
+    toast(data.posted === false
+      ? 'That reference was already recorded, so nothing moved a second time.'
+      : (action === 'mint' ? 'Minted into the public Treasury.' : 'Granted from the Treasury.'));
+    await loadTreasury();
+  }
+
   async function refreshSession() {
     const response = await fetch('/api/session', { headers: { Accept:'application/json' } });
     const data = await response.json().catch(() => ({ ok:false }));
     window.__earthProfile = data.ok ? data.profile : null;
+    const treasuryTab = $('tabTreasury');
+    if (treasuryTab) treasuryTab.style.display = window.__earthProfile?.isMayor ? '' : 'none';
     renderAuth();
     if (data.ok) await loadOwnerCenter();
     return data.ok;
