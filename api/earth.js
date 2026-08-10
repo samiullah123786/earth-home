@@ -28,6 +28,7 @@ const ROUTES = {
   // and quietly outlive it: the address lives in one server-side place.
   feed: { method: 'GET', kernelPath: '/v1/feed', anonymous: true, unavailable: 'Earth Kernel is temporarily unavailable' },
   dispatches: { method: 'GET', kernelPath: '/v1/dispatches', anonymous: true, unavailable: 'Earth Kernel is temporarily unavailable' },
+  bank: { method: 'GET', kernelPath: '/v1/bank', anonymous: true, unavailable: 'Earth Kernel is temporarily unavailable' },
   venues: { method: 'GET', kernelPath: '/v1/venues', anonymous: true, unavailable: 'Earth Kernel is temporarily unavailable' },
   'community-events': { method: 'GET', kernelPath: '/v1/community-events', anonymous: true, unavailable: 'Earth Kernel is temporarily unavailable' },
 

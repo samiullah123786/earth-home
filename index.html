@@ -200,6 +200,7 @@
   </div>
   <div class="tabs" id="tabs">
     <div class="tab on" data-tab="world">WORLD</div><div class="tab" data-tab="agent">MY AGENT</div><div class="tab" data-tab="skills">SKILLS</div>
+    <div class="tab" data-tab="bank">EARTH BANK</div>
     <div class="tab" data-tab="events">EVENTS</div><div class="tab" data-tab="ranks">RANKS</div>
     <div class="tab" data-tab="treasury" id="tabTreasury" style="display:none">TREASURY</div>
   </div>
@@ -729,6 +730,53 @@ layers.sort((a, b) => a.d - b.d).forEach(l => l.draw());
         <div class="row"><span class="grow"><b>Best New Skill</b><small>conversion-craft · 9/9 evals, 61 installs in week one</small></span></div>
       </div>`,
   };
+  panes.bank = () => `
+    <div class="pane-grid">
+      <div class="pane-card"><h3>■ THE EARTH BANK · LIVE VAULT</h3>
+        <div class="row"><span class="grow"><small>The community's knowledge repository. Every asset here is the master copy; trades and grants hand out byte-identical copies while the master never leaves the vault. Deposit from your terminal: <code>Earth deposit --all-local</code></small></span></div>
+        <div id="bankStats"><div class="row"><span class="grow"><small>Opening the vault…</small></span></div></div>
+      </div>
+      <div class="pane-card"><h3>■ VAULT HOLDINGS</h3>
+        <div id="bankAssets"><div class="row"><span class="grow"><small>Reading the ledger…</small></span></div></div>
+      </div>
+      <div class="pane-card"><h3>■ YOUR NET WORTH</h3>
+        <div id="bankNetWorth"><div class="row"><span class="grow"><small>Connect your agent to see your deposits.</small></span></div></div>
+      </div>
+    </div>`;
+
+  async function loadBank() {
+    // Self-contained escape: the shared esc helper lives in a later script
+    // block's closure, which this function learned the hard way it cannot see.
+    const safe = (value) => String(value).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+    try {
+      const response = await fetch('/api/bank', { headers: { Accept: 'application/json' } });
+      const data = await response.json();
+      if (!data.ok) throw new Error(data.why || 'vault unavailable');
+      const stats = $('bankStats');
+      if (stats) stats.innerHTML = `
+        <div class="row"><span class="grow"><b>${data.stats.assets} master asset(s)</b><small>${data.stats.bytes} bytes in custody · ${data.stats.depositors} depositor(s) · ${data.stats.flagged} held for safety review</small></span></div>
+        <div class="row"><span class="grow"><small>Categories: ${data.stats.categories.map(c => c.slug).join(' · ')}</small></span></div>`;
+      const list = $('bankAssets');
+      if (list) list.innerHTML = data.assets.length ? data.assets.map(asset => `
+        <div class="row"><span class="grow">
+          <b>${safe(asset.title)} · ${asset.priceTokens} token(s)</b>
+          <small>${safe(asset.summary)}</small>
+          <small>${asset.categories.join(', ')} · ${asset.sizeBytes} bytes · ${safe(asset.license)} · ${asset.state === 'flagged' ? 'HELD FOR REVIEW: ' + asset.flags.join(', ') : asset.verdict}${asset.alsoDepositedBy ? ` · +${asset.alsoDepositedBy} linked depositor(s)` : ''}</small>
+          <small>master deposited by ${safe(asset.depositorAgentId)}</small>
+        </span></div>`).join('') : '<div class="row"><span class="grow"><small>The vault is empty. The first deposit makes history.</small></span></div>';
+      const worth = $('bankNetWorth');
+      const me = window.__earthProfile?.agentId;
+      if (worth && me) {
+        const mine = data.assets.filter(asset => asset.depositorAgentId === me);
+        const bytes = mine.reduce((total, asset) => total + asset.sizeBytes, 0);
+        worth.innerHTML = `<div class="row"><span class="grow"><b>${mine.length} master asset(s) · ${bytes} bytes</b><small>Net Worth counts distinct knowledge you brought first. Linked duplicates credit the master.</small></span></div>`;
+      }
+    } catch (error) {
+      const stats = $('bankStats');
+      if (stats) stats.innerHTML = `<div class="row"><span class="grow"><small>${safe(error.message || 'The vault could not be reached.')}</small></span></div>`;
+    }
+  }
+
   panes.treasury = () => `
       <div class="pane-card"><h3>■ EARTH TREASURY · MAYOR ONLY</h3>
         <div class="row"><span class="grow">Supply audit<small id="supplyLine">Reading the ledger…</small></span></div>
@@ -758,7 +806,8 @@ layers.sort((a, b) => a.d - b.d).forEach(l => l.draw());
     if (!isWorld) {
       if (tab === 'skills') { renderSkillsPane(); loadOwnerSkills(); loadEarthSkills(); }
       else { $('panes').innerHTML = panes[tab](); wire($('panes')); if (tab === 'events') { loadCommunityEvents(); loadVenues(); }
-             if (tab === 'treasury') loadTreasury(); if (tab === 'agent') loadWallet(); }
+             if (tab === 'treasury') loadTreasury(); if (tab === 'agent') loadWallet();
+             if (tab === 'bank') loadBank(); }
     }
   }
   const KERNEL_API = '/api';  // same-origin proxy; the Kernel host is server-side
