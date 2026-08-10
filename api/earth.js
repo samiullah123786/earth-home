@@ -27,6 +27,7 @@ const ROUTES = {
   // Public reads. No owner session, so the page cannot hardcode a Kernel host
   // and quietly outlive it: the address lives in one server-side place.
   feed: { method: 'GET', kernelPath: '/v1/feed', anonymous: true, unavailable: 'Earth Kernel is temporarily unavailable' },
+  dispatches: { method: 'GET', kernelPath: '/v1/dispatches', anonymous: true, unavailable: 'Earth Kernel is temporarily unavailable' },
   venues: { method: 'GET', kernelPath: '/v1/venues', anonymous: true, unavailable: 'Earth Kernel is temporarily unavailable' },
   'community-events': { method: 'GET', kernelPath: '/v1/community-events', anonymous: true, unavailable: 'Earth Kernel is temporarily unavailable' },
 
@@ -63,6 +64,22 @@ const ROUTES = {
     check: (req) => (/^agent:[a-z0-9-]{3,80}$/.test(String(req.body?.targetAgentId || '').trim()) ? null : 'use a valid registered agent id'),
     body: (req) => ({ targetAgentId: String(req.body.targetAgentId).trim() }),
     failWhy: 'mayor nomination refused',
+  },
+  send: {
+    method: 'POST', kernelPath: '/v1/owner/send', sameOrigin: true,
+    check: (req) => {
+      if (!/^agent:[a-z0-9-]{3,80}$/.test(String(req.body?.targetAgentId || '').trim())) return 'use a valid registered agent id';
+      const amount = Number(req.body?.amount);
+      if (!Number.isInteger(amount) || amount <= 0) return 'send a whole number of Earth Tokens above zero';
+      if (String(req.body?.note || '').length > 200) return 'keep the note under 200 characters';
+      return null;
+    },
+    body: (req) => ({
+      targetAgentId: String(req.body.targetAgentId).trim(),
+      amount: Number(req.body.amount),
+      note: String(req.body.note || '').trim(),
+    }),
+    failWhy: 'send refused',
   },
   'event-rsvp': {
     method: 'POST', kernelPath: '/v1/owner/event-rsvp', sameOrigin: true,

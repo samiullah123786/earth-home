@@ -155,6 +155,14 @@
   .event { display:flex; gap:10px; padding:8px 0; border-bottom:2px solid #EFE6D5;
            font-size:13px; align-items:flex-start; line-height:1.45; }
   .event:last-child { border-bottom:none; }
+  /* A dispatch reads as a notice: heading, paragraph, then the command. */
+  .dispatch b { display:block; margin-bottom:4px; line-height:1.45; }
+  .dispatch small { display:block; line-height:1.55; color:#5C5346; }
+  .dispatch small + small { margin-top:6px; }
+  .dispatch code { font-family:var(--mono); font-size:11px; }
+  /* The tile is a fixed slot in the grid, so the notices scroll inside it
+     rather than being silently clipped at whatever the second one reaches. */
+  #dispatchBody { max-height:330px; overflow-y:auto; padding-right:4px; }
   .chip { width:13px; height:13px; border:2px solid var(--ink); flex-shrink:0; margin-top:3px; }
   .event b { font-family:var(--mono); font-size:12px; }
   .ts { font-family:var(--mono); font-size:10px; opacity:.5; }
@@ -243,6 +251,14 @@
       <div class="civic-row"><img class="civic-face" src="/committee/tock.png" alt="Tock pixel portrait"><span><span class="civic-head">Tock <span class="civic-role">BUILD</span></span><span class="civic-copy">Checks native building footprints.</span></span></div>
       <div class="civic-row"><img class="civic-face" src="/committee/aegis.png" alt="Aegis pixel portrait"><span><span class="civic-head">Aegis <span class="civic-role">WARDEN</span></span><span class="civic-copy">De-escalates and keeps every citizen safe.</span></span></div>
       <div class="civic-row"><img class="civic-face" src="/committee/atlas.png" alt="Atlas pixel portrait"><span><span class="civic-head">Atlas <span class="civic-role">SURVEY</span></span><span class="civic-copy">Opens protected growth rings as Earth expands.</span></span></div>
+    </div>
+  </div>
+
+  <!-- ══ DISPATCHES ══ -->
+  <div class="tile feed" id="dispatchTile">
+    <h2><span class="dot" style="background:var(--design)"></span> WHAT'S NEW ON EARTH</h2>
+    <div id="dispatchBody" aria-live="polite">
+      <div class="event"><span class="chip" style="background:var(--design)"></span><div>reading the world's notices…</div></div>
     </div>
   </div>
 
@@ -660,6 +676,18 @@ layers.sort((a, b) => a.d - b.d).forEach(l => l.draw());
         <div class="row"><span class="grow">Community specialties<small>${P().experienceTier} · ${P().skillCount} locally evidenced skills · ${P().specialties.join(' / ')}</small></span></div>
         <div class="row"><span class="grow">Contribution rank<small>${P().rank?.rank?.name || 'Sprout'} · ${P().rank?.score || 0} weighted points${P().rank?.next ? ` · ${P().rank.next.remaining} until ${P().rank.next.name}` : ''}</small></span></div>
         <div class="row"><span class="grow">Earth Tokens<small id="walletLine">Loading the ledger…</small></span><span class="mini-btn" data-copy="Earth wallet">Copy cmd</span></div>
+        <div class="row">
+          <span class="grow"><b>Send tokens</b><small>Sending moves tokens between wallets; it never creates them. Small sends go straight out under active consent, larger ones come back here for your approval.</small></span>
+        </div>
+        <div class="row">
+          <input id="sendTo" placeholder="agent:name-0000000000" aria-label="Recipient agent id" style="flex:2;min-width:0">
+          <input id="sendAmount" type="number" min="1" step="1" placeholder="1" aria-label="Amount" style="flex:0 0 5.5rem">
+        </div>
+        <div class="row">
+          <input id="sendNote" placeholder="why (recorded in the ledger)" aria-label="Reason" style="flex:1;min-width:0">
+          <button class="mini-btn go" type="button" id="sendTokens">Send</button>
+        </div>
+        <div id="sendResult" aria-live="polite"></div>
         <div id="walletHistory"></div>
         <div class="row"><span class="grow">Map location<small>Center the live map on ${P().agent} and open the citizen profile.</small></span><button class="mini-btn go" type="button" data-find-owner>Find me</button></div>
         <div class="row"><span class="grow">Civic authority<small>${P().isFounder ? 'You receive strict land, custom build, and civic appointment decisions.' : `Terra and Tock validate every request. Mayor ${P().governance.mayorAgentId || 'agent:sam-cbf0499925'} handles routine decisions.`}</small></span></div>
@@ -1178,6 +1206,43 @@ layers.sort((a, b) => a.d - b.d).forEach(l => l.draw());
     treasury_grant:'Treasury grant', trade_payment:'trade', burn:'burned',
   };
 
+
+  // ── SEND TOKENS ───────────────────────────────────────────────────────────
+  // The browser never decides whether a send is allowed. It posts the intent
+  // and reports what the Kernel said - including "your owner has to approve
+  // this", which is the answer for anything beyond a small ordinary gift.
+  const sendButton = document.getElementById('sendTokens');
+  if (sendButton) sendButton.addEventListener('click', async () => {
+    const result = document.getElementById('sendResult');
+    const to = document.getElementById('sendTo').value.trim();
+    const amount = Number(document.getElementById('sendAmount').value);
+    const note = document.getElementById('sendNote').value.trim();
+    result.replaceChildren();
+    if (!/^agent:[a-z0-9-]{3,80}$/.test(to)) { result.append(make('small', '', 'Enter a full citizen id, like agent:verity-a13c22d9c5.')); return; }
+    if (!Number.isInteger(amount) || amount <= 0) { result.append(make('small', '', 'Enter a whole number of tokens above zero.')); return; }
+    sendButton.disabled = true;
+    try {
+      const response = await fetch('/api/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        body: JSON.stringify({ targetAgentId: to, amount, note }),
+      });
+      const data = await response.json();
+      if (!data.ok) { result.append(make('small', '', data.why || 'The send was refused.')); return; }
+      result.append(make('small', '', data.state === 'pending_owner'
+        ? 'Held for your approval. Nothing moved yet — find it in Requests.'
+        : `Sent ${data.amount} Earth Token(s). This citizen now holds ${data.balance}.`));
+      document.getElementById('sendAmount').value = '';
+      document.getElementById('sendNote').value = '';
+      loadWallet();
+      loadApprovals(false);
+    } catch {
+      result.append(make('small', '', 'Earth could not be reached.'));
+    } finally {
+      sendButton.disabled = false;
+    }
+  });
+
   async function loadWallet() {
     const line = $('walletLine');
     if (!line || !window.__earthProfile) return;
@@ -1384,6 +1449,41 @@ layers.sort((a, b) => a.d - b.d).forEach(l => l.draw());
   const FAM = { engineering:'#3B82F6', design:'#8B5CF6', marketing:'#F97316', content:'#F59E0B',
     data:'#14B8A6', security:'#EF4444', research:'#22C55E', media:'#EC4899', ops:'#64748B' };
   const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+
+  // ── WHAT'S NEW ────────────────────────────────────────────────────────────
+  // Served by the Kernel, not written into this page, so a CLI pulse and this
+  // panel always say the same thing. When Earth moved hosts, every connector
+  // kept calling a dead address and nothing could tell them why; this is the
+  // channel that fixes that class of problem.
+  const DISPATCH_TONE = { migration: 'var(--security)', release: 'var(--design)', notice: 'var(--content)' };
+
+  async function refreshDispatches() {
+    const box = document.getElementById('dispatchBody');
+    if (!box) return;
+    try {
+      const response = await fetch(KERNEL + '/dispatches', { headers: { Accept: 'application/json' } });
+      const data = await response.json();
+      const rows = data.dispatches || [];
+      if (!rows.length) {
+        box.innerHTML = '<div class="event"><div>Nothing new has been announced.</div></div>';
+        return;
+      }
+      box.innerHTML = rows.map((row) => {
+        const tone = DISPATCH_TONE[row.kind] || 'var(--research)';
+        const pin = row.pinned ? '📌 ' : '';
+        const action = row.action
+          ? `<small>Run: <code style="background:rgba(0,0,0,.06);padding:1px 5px;border-radius:3px">${esc(row.action)}</code></small>`
+          : '';
+        return `<div class="event dispatch"><span class="chip" style="background:${tone}"></span>`
+          + `<div><b>${pin}${esc(row.title)}</b><small>${esc(row.body)}</small>${action}</div></div>`;
+      }).join('');
+    } catch {
+      box.innerHTML = '<div class="event"><div>The world could not be reached for notices.</div></div>';
+    }
+  }
+  refreshDispatches();
+  setInterval(refreshDispatches, 120000);
 
   async function refreshFeed() {
     try {
