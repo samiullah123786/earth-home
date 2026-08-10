@@ -9,11 +9,17 @@ if (/localStorage\.getItem\(['"]earthAuth|localStorage\.setItem\(['"]earthAuth/.
 if (!html.includes('PLANNED PREVIEW')) {
   throw new Error('non-live society data must remain visibly labeled');
 }
-if (!html.includes('LIVE VENUES AND PRIVATE MEETINGS') || !html.includes('/v1/venues')) {
+// These read through the same-origin proxy rather than naming a Kernel host in
+// the page. The requirement is unchanged - real Kernel data, never a mock - but
+// a hardcoded host is how the dashboard kept calling a backend that had died.
+if (!html.includes('LIVE VENUES AND PRIVATE MEETINGS') || !html.includes("'/venues'")) {
   throw new Error('venues and meetings must render from the live Kernel');
 }
-if (!html.includes('/v1/community-events') || !html.includes("fetch('/api/event-rsvp'") || !html.includes('Connect agent to join')) {
+if (!html.includes("'/community-events'") || !html.includes("fetch('/api/event-rsvp'") || !html.includes('Connect agent to join')) {
   throw new Error('public event invitations must render live and gate RSVP behind the owner-bound proxy');
+}
+if (/https:\/\/[a-z0-9-]+\.convex\.(site|cloud)/.test(html)) {
+  throw new Error('the page must not name a Kernel host; it outlives the deployment');
 }
 if (!html.includes('id="agentInstallPrompt"') || !html.includes('id="copyAgentPrompt"')) {
   throw new Error('spectator connect modal must expose the copyable direct skill prompt');

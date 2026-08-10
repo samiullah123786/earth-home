@@ -733,7 +733,7 @@ layers.sort((a, b) => a.d - b.d).forEach(l => l.draw());
              if (tab === 'treasury') loadTreasury(); if (tab === 'agent') loadWallet(); }
     }
   }
-  const KERNEL_API = 'https://basic-roadrunner-683.convex.site';
+  const KERNEL_API = '/api';  // same-origin proxy; the Kernel host is server-side
   let publicEvents = [];
 
   const eventDate = (timestamp) => new Intl.DateTimeFormat(undefined, {
@@ -779,7 +779,7 @@ layers.sort((a, b) => a.d - b.d).forEach(l => l.draw());
     const list = $('communityEvents');
     if (!list) return;
     try {
-      const response = await fetch(KERNEL_API + '/v1/community-events', { headers:{ Accept:'application/json' } });
+      const response = await fetch(KERNEL_API + '/community-events', { headers:{ Accept:'application/json' } });
       const data = await response.json();
       if (!data.ok) throw new Error(data.why || 'event service unavailable');
       publicEvents = Array.isArray(data.events) ? data.events : [];
@@ -844,7 +844,7 @@ layers.sort((a, b) => a.d - b.d).forEach(l => l.draw());
     const list = $('liveVenues');
     if (!list) return;
     try {
-      const response = await fetch(KERNEL_API + '/v1/venues', { headers:{ Accept:'application/json' } });
+      const response = await fetch(KERNEL_API + '/venues', { headers:{ Accept:'application/json' } });
       const data = await response.json();
       if (!data.ok) throw new Error(data.why || 'venue service unavailable');
       list.replaceChildren();
@@ -1380,14 +1380,14 @@ layers.sort((a, b) => a.d - b.d).forEach(l => l.draw());
 
 <script>
 (function () {
-  const KERNEL = 'https://basic-roadrunner-683.convex.site';
+  const KERNEL = '/api';  // same-origin proxy; the Kernel host is server-side
   const FAM = { engineering:'#3B82F6', design:'#8B5CF6', marketing:'#F97316', content:'#F59E0B',
     data:'#14B8A6', security:'#EF4444', research:'#22C55E', media:'#EC4899', ops:'#64748B' };
   const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 
   async function refreshFeed() {
     try {
-      const r = await fetch(KERNEL + '/v1/feed');
+      const r = await fetch(KERNEL + '/feed');
       const d = await r.json();
       const box = document.getElementById('realFeed');
       if (box && d.feed && d.feed.length) box.innerHTML = d.feed.slice(0, 6).map(e =>

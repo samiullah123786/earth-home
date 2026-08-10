@@ -24,6 +24,12 @@ const ONE_OF = (value, allowed) => allowed.includes(value);
  * with, or nothing to proceed.
  */
 const ROUTES = {
+  // Public reads. No owner session, so the page cannot hardcode a Kernel host
+  // and quietly outlive it: the address lives in one server-side place.
+  feed: { method: 'GET', kernelPath: '/v1/feed', anonymous: true, unavailable: 'Earth Kernel is temporarily unavailable' },
+  venues: { method: 'GET', kernelPath: '/v1/venues', anonymous: true, unavailable: 'Earth Kernel is temporarily unavailable' },
+  'community-events': { method: 'GET', kernelPath: '/v1/community-events', anonymous: true, unavailable: 'Earth Kernel is temporarily unavailable' },
+
   session: { method: 'GET', kernelPath: '/v1/owner/session', unavailable: 'Earth Kernel is temporarily unavailable' },
   approvals: { method: 'GET', kernelPath: '/v1/owner/approvals', authWhy: 'not owner-bound', unavailable: 'Earth Kernel is temporarily unavailable' },
   skills: { method: 'GET', kernelPath: '/v1/owner/skills', unavailable: 'Earth Kernel is temporarily unavailable' },
@@ -178,7 +184,7 @@ module.exports = async function handler(req, res) {
   try {
     if (route.sameOrigin) requireSameOrigin(req);
     const token = ownerToken(req);
-    if (!token) return send(res, 401, { ok: false, why: route.authWhy || 'connect your agent first' });
+    if (!token && !route.anonymous) return send(res, 401, { ok: false, why: route.authWhy || 'connect your agent first' });
 
     const refusal = route.check ? route.check(req) : null;
     if (refusal) return send(res, 400, { ok: false, why: refusal });
