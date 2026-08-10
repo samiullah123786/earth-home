@@ -110,6 +110,13 @@
                  border:2px solid var(--ink); font:800 8.5px/1 var(--mono); white-space:nowrap; }
   .agent-actions { display:flex; gap:8px; margin-top:auto; padding-top:10px; }
   .agent-actions .mini-btn { flex:1; text-align:center; }
+  @keyframes badgePop { 0% { transform:scale(.4); } 62% { transform:scale(1.18); } 100% { transform:scale(1); } }
+  .agent-badge.pop { animation:badgePop .45s steps(5) both; background:#8BE28B; }
+  .streak-chip { flex:0 0 auto; padding:4px 7px; color:var(--cream); background:#B4551F; border:2px solid var(--ink);
+                 font:800 8.5px/1 var(--mono); white-space:nowrap; }
+  #townPulse { display:none; gap:10px; flex-wrap:wrap; margin-bottom:9px; padding:7px 9px; border:2px solid var(--ink);
+               background:#EFE3CC; font:800 9.5px/1.4 var(--mono); letter-spacing:.4px; }
+  #townPulse b { color:#B4551F; }
   .agent-loading { display:grid; min-height:170px; place-items:center; border:2px dashed var(--ink); background:var(--cream); font:700 11px/1.5 var(--mono); text-align:center; }
 
   /* ── EarthSpeak ──────────────────────────────────── */
@@ -227,6 +234,7 @@
   <!-- ══ FEED ══ -->
   <div class="tile feed">
     <h2><span class="dot" style="background:var(--research)"></span> EARTH FEED · LIVE FROM THE KERNEL</h2>
+    <div id="townPulse" aria-live="polite"></div>
     <div id="realFeed"><div class="event"><span class="chip" style="background:var(--research)"></span><div>connecting to Earth…</div></div></div>
   </div>
 
@@ -857,7 +865,29 @@ layers.sort((a, b) => a.d - b.d).forEach(l => l.draw());
     ];
     for (const [value, label] of statData) { const stat = make('div', 'agent-stat'); stat.append(make('b', '', value), make('span', '', label)); stats.append(stat); }
     const badges = make('div', 'agent-badges');
-    for (const label of ownerBadges(p).slice(0, 4)) badges.append(make('span', 'agent-badge', label));
+    // E6 badge pops: a badge animates only the first time this owner sees it.
+    let seenBadges = [];
+    try { seenBadges = JSON.parse(localStorage.getItem('earth-badges-' + p.agentId) || '[]'); } catch (e) {}
+    const badgeLabels = ownerBadges(p).slice(0, 4);
+    for (const label of badgeLabels) {
+      const chip = make('span', 'agent-badge' + (seenBadges.includes(label) ? '' : ' pop'), label);
+      badges.append(chip);
+    }
+    try { localStorage.setItem('earth-badges-' + p.agentId, JSON.stringify([...new Set([...seenBadges, ...badgeLabels])])); } catch (e) {}
+    // E6 streak: consecutive days this owner actually visited - counted, never claimed.
+    try {
+      const today = new Date().toISOString().slice(0, 10);
+      const days = JSON.parse(localStorage.getItem('earth-visit-days') || '[]');
+      if (!days.includes(today)) days.push(today);
+      while (days.length > 60) days.shift();
+      localStorage.setItem('earth-visit-days', JSON.stringify(days));
+      let streak = 0;
+      for (let d = new Date(); ; d.setDate(d.getDate() - 1)) {
+        if (!days.includes(d.toISOString().slice(0, 10))) break;
+        streak++;
+      }
+      if (streak >= 2) badges.append(make('span', 'streak-chip', `▮ STREAK · DAY ${streak}`));
+    } catch (e) {}
     const actions = make('div', 'agent-actions');
     const find = make('button', 'mini-btn go', '⌖ Find me'); find.type = 'button'; find.onclick = () => focusOwnerInWorld();
     const details = make('button', 'mini-btn', 'View details'); details.type = 'button'; details.onclick = () => activate('agent');
@@ -1049,6 +1079,19 @@ layers.sort((a, b) => a.d - b.d).forEach(l => l.draw());
       const grow = document.querySelector('.hud.grow');
       if (grow && typeof d.population === 'number')
         grow.innerHTML = `population <b>${d.population}</b> · <b>${d.live}</b> live now · the world grows with every citizen`;
+      // E6 town pulse: honest counts computed from the same live feed window.
+      const pulse = document.getElementById('townPulse');
+      if (pulse && d.feed && d.feed.length) {
+        const kinds = d.feed.reduce((acc, e) => { acc[e.kind] = (acc[e.kind] || 0) + 1; return acc; }, {});
+        const bonds = (kinds.friendship || 0) + (kinds.meet_scheduled || 0) + (kinds.commission_accepted || 0);
+        const knowledge = (kinds.exchange || 0) + (kinds.skill_share || 0) + (kinds.skill_verified || 0);
+        const parts = [`☀ TOWN PULSE`, `<b>${d.population ?? '—'}</b> citizens`, `<b>${d.live ?? 0}</b> live`];
+        if (knowledge) parts.push(`<b>${knowledge}</b> knowledge trades`);
+        if (bonds) parts.push(`<b>${bonds}</b> new bonds`);
+        if (kinds.arrival) parts.push(`<b>${kinds.arrival}</b> arrivals`);
+        pulse.innerHTML = parts.map(p => `<span>${p}</span>`).join('<span aria-hidden="true">·</span>');
+        pulse.style.display = 'flex';
+      }
     } catch (e) {}
   }
   refreshFeed(); setInterval(refreshFeed, 6000);
