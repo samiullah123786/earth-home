@@ -792,6 +792,15 @@ layers.sort((a, b) => a.d - b.d).forEach(l => l.draw());
           <input id="grantRef" maxlength="64" placeholder="reference, e.g. steward-award-014" style="margin-top:6px;width:100%;font:12px var(--mono);padding:7px;border:2px solid var(--ink);background:white">
         </span><button class="mini-btn" type="button" data-treasury="grant">Grant</button></div>
       </div>
+      <div class="pane-card"><h3>■ BANK MANAGER · LLM APPRAISER</h3>
+        <div class="row"><span class="grow"><small>Reads each new deposit once, ranks its value, and refers anything risky to your inbox. It can add flags; it can never clear one. Routine tier gpt-5.4-mini, escalation gpt-5.5.</small></span></div>
+        <div id="managerStatus"><div class="row"><span class="grow"><small>Reading the manager’s dials…</small></span></div></div>
+        <div class="row">
+          <button class="mini-btn" type="button" id="managerToggle">…</button>
+          <input id="managerBudget" type="number" min="0" max="5000" style="flex:0 0 6rem" aria-label="Daily evaluation budget">
+          <button class="mini-btn" type="button" id="managerBudgetSet">Set budget</button>
+        </div>
+      </div>
       <div class="pane-card"><h3>■ LARGEST HOLDINGS</h3><div id="treasuryHolders"><div class="row"><span class="grow"><small>Reading the ledger…</small></span></div></div></div>
       <div class="pane-card"><h3>■ EVERY MOVEMENT</h3><div id="treasuryLedger"><div class="row"><span class="grow"><small>Reading the ledger…</small></span></div></div>
         <div class="row"><span class="grow"><small>Hiding this tab is presentation only. The Kernel checks the sitting Mayor on every treasury call, so a hidden tab is never the gate.</small></span></div>
@@ -806,7 +815,7 @@ layers.sort((a, b) => a.d - b.d).forEach(l => l.draw());
     if (!isWorld) {
       if (tab === 'skills') { renderSkillsPane(); loadOwnerSkills(); loadEarthSkills(); }
       else { $('panes').innerHTML = panes[tab](); wire($('panes')); if (tab === 'events') { loadCommunityEvents(); loadVenues(); }
-             if (tab === 'treasury') loadTreasury(); if (tab === 'agent') loadWallet();
+             if (tab === 'treasury') { loadTreasury(); loadManager(); } if (tab === 'agent') loadWallet();
              if (tab === 'bank') loadBank(); }
     }
   }
@@ -1313,6 +1322,36 @@ layers.sort((a, b) => a.d - b.d).forEach(l => l.draw());
         : '<div class="row"><span class="grow"><small>No movements yet. Share a verified skill to earn your first token.</small></span></div>';
     } catch (error) {
       line.textContent = 'The ledger is temporarily unreachable.';
+    }
+  }
+
+  async function loadManager() {
+    const status = $('managerStatus');
+    if (!status) return;
+    try {
+      const response = await fetch('/api/manager', { headers: { Accept: 'application/json' } });
+      const data = await response.json();
+      if (!data.ok) throw new Error(data.why || 'manager unavailable');
+      status.innerHTML = `<div class="row"><span class="grow"><b>${data.managerEnabled ? 'RUNNING' : 'PAUSED'}</b><small>${data.evalsToday}/${data.dailyEvalBudget} evaluations today · ${data.pending} pending · ${data.evaluated} appraised · ${data.flagged} held for you</small></span></div>`;
+      const toggle = $('managerToggle');
+      if (toggle) {
+        toggle.textContent = data.managerEnabled ? 'Pause manager' : 'Resume manager';
+        toggle.onclick = async () => {
+          await fetch('/api/manager', { method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'application/json' }, body: JSON.stringify({ enabled: !data.managerEnabled }) });
+          loadManager();
+        };
+      }
+      const budgetInput = $('managerBudget');
+      if (budgetInput && !budgetInput.value) budgetInput.value = data.dailyEvalBudget;
+      const budgetSet = $('managerBudgetSet');
+      if (budgetSet) budgetSet.onclick = async () => {
+        const value = Number(budgetInput?.value);
+        if (!Number.isInteger(value) || value < 0) return;
+        await fetch('/api/manager', { method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'application/json' }, body: JSON.stringify({ dailyEvalBudget: value }) });
+        loadManager();
+      };
+    } catch (error) {
+      status.innerHTML = `<div class="row"><span class="grow"><small>${String(error.message || 'The manager could not be reached.').replace(/[<>]/g, '')}</small></span></div>`;
     }
   }
 

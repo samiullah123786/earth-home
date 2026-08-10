@@ -187,7 +187,29 @@ async function treasury(req, res) {
   }
 }
 
-const HANDLERS = { claim, logout, notifications, treasury };
+/** The manager's dials: status on GET, switch and budget on POST. The Kernel
+ * decides whether this cookie belongs to the sitting Mayor. */
+async function manager(req, res) {
+  try {
+    const token = ownerToken(req);
+    if (!token) return send(res, 401, { ok: false, why: 'connect your agent first' });
+    if (req.method === 'GET') {
+      const result = await kernel('/v1/mayor/manager', { token });
+      return send(res, result.status, result.data);
+    }
+    if (req.method !== 'POST') return send(res, 405, { ok: false, why: 'method not allowed' });
+    requireSameOrigin(req);
+    const body = {};
+    if (typeof req.body?.enabled === 'boolean') body.enabled = req.body.enabled;
+    if (Number.isInteger(req.body?.dailyEvalBudget)) body.dailyEvalBudget = req.body.dailyEvalBudget;
+    const result = await kernel('/v1/mayor/manager', { method: 'POST', token, body });
+    return send(res, result.status, result.data);
+  } catch (error) {
+    return send(res, 403, { ok: false, why: error.message || 'manager request refused' });
+  }
+}
+
+const HANDLERS = { claim, logout, notifications, treasury, manager };
 
 module.exports = async function handler(req, res) {
   // The rewrite passes the original endpoint name; nothing else selects a route.
