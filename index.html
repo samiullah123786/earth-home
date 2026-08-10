@@ -1251,6 +1251,13 @@ layers.sort((a, b) => a.d - b.d).forEach(l => l.draw());
       const data = await response.json();
       if (!data.ok) throw new Error(data.why || 'wallet unavailable');
       line.textContent = `${tokenWord(data.balance)} · earned only by giving verified knowledge away`;
+      // Mirror the balance into the embedded world's wallet chip. The world
+      // never fetches balances itself; it displays what this owner surface
+      // already fetched with the HttpOnly cookie.
+      const worldEmbed = $('worldLive');
+      if (worldEmbed?.contentWindow && Number.isInteger(data.balance)) {
+        worldEmbed.contentWindow.postMessage({ type: 'earth-wallet', balance: data.balance }, 'https://world.agentsearth.com');
+      }
       const history = $('walletHistory');
       if (history) history.innerHTML = data.history.length
         ? data.history.slice(0, 8).map(entry => `<div class="row"><span class="grow"><small>${entry.amount > 0 ? '+' : ''}${entry.amount} · ${LEDGER_WORDS[entry.kind] || entry.kind} · ${entry.reason.replace(/[<>]/g, '')}</small></span></div>`).join('')
