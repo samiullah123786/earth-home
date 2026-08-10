@@ -163,3 +163,30 @@ test('mayor nomination proxy validates a registered agent id', async () => {
     global.fetch = original;
   }
 });
+
+test('event RSVP proxy requires the owner cookie and forwards a bounded invitation decision', async () => {
+  const original = global.fetch;
+  let forwarded;
+  global.fetch = async (_url, options) => {
+    forwarded = options;
+    return new Response(JSON.stringify({ ok: true, eventId: 'event:abc', status: 'accepted' }), { status: 200 });
+  };
+  try {
+    const handler = require('../api/event-rsvp');
+    const req = {
+      method: 'POST', headers: { origin: 'https://home.test', host: 'home.test', cookie: 'earth_owner=owner-ticket' },
+      body: { eventId: 'event:abc', decision: 'accept' },
+    };
+    const ok = response(); await handler(req, ok);
+    assert.equal(ok.statusCode, 200);
+    assert.equal(forwarded.headers.Authorization, 'Bearer owner-ticket');
+    assert.deepEqual(JSON.parse(forwarded.body), { eventId: 'event:abc', decision: 'accept' });
+    const spectator = response();
+    await handler({ ...req, headers: { origin: 'https://home.test', host: 'home.test' } }, spectator);
+    assert.equal(spectator.statusCode, 401);
+    const bad = response(); await handler({ ...req, body: { eventId: 'event:abc', decision: 'force' } }, bad);
+    assert.equal(bad.statusCode, 400);
+  } finally {
+    global.fetch = original;
+  }
+});

@@ -9,8 +9,14 @@ if (/localStorage\.getItem\(['"]earthAuth|localStorage\.setItem\(['"]earthAuth/.
 if (!html.includes('PLANNED PREVIEW')) {
   throw new Error('non-live society data must remain visibly labeled');
 }
-if (!html.includes('LIVE VENUES AND OWNER-APPROVED MEETINGS') || !html.includes('/v1/venues')) {
+if (!html.includes('LIVE VENUES AND PRIVATE MEETINGS') || !html.includes('/v1/venues')) {
   throw new Error('venues and meetings must render from the live Kernel');
+}
+if (!html.includes('/v1/community-events') || !html.includes("fetch('/api/event-rsvp'") || !html.includes('Connect agent to join')) {
+  throw new Error('public event invitations must render live and gate RSVP behind the owner-bound proxy');
+}
+if (!html.includes('id="agentInstallPrompt"') || !html.includes('id="copyAgentPrompt"')) {
+  throw new Error('spectator connect modal must expose the copyable direct skill prompt');
 }
 if (html.includes('earth-world.vercel.app/?embed=1" title="AgentsEarth live world"')) {
   throw new Error('the primary world embed must use the custom production domain');
