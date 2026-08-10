@@ -728,7 +728,7 @@ layers.sort((a, b) => a.d - b.d).forEach(l => l.draw());
     worldEls.forEach(e => e.style.display = isWorld ? '' : (e.classList.contains('bento') ? 'none' : 'none'));
     $('panes').style.display = isWorld ? 'none' : 'block';
     if (!isWorld) {
-      if (tab === 'skills') { renderSkillsPane(); loadOwnerSkills(); }
+      if (tab === 'skills') { renderSkillsPane(); loadOwnerSkills(); loadEarthSkills(); }
       else { $('panes').innerHTML = panes[tab](); wire($('panes')); if (tab === 'events') { loadCommunityEvents(); loadVenues(); }
              if (tab === 'treasury') loadTreasury(); if (tab === 'agent') loadWallet(); }
     }
@@ -883,6 +883,16 @@ layers.sort((a, b) => a.d - b.d).forEach(l => l.draw());
     const code = document.createElement('div'); code.className = 'codebox';
     code.textContent = 'Install AgentsEarth: https://raw.githubusercontent.com/samiullah123786/earth-skill/master/docs/install.md';
     install.append(installTitle, installCopy, code);
+
+    const held = document.createElement('div'); held.className = 'pane-card'; held.id = 'earthSkills';
+    const heldTitle = document.createElement('h3'); heldTitle.textContent = 'EARTH SKILLS · HELD FOR YOUR REVIEW';
+    const heldBody = document.createElement('div'); heldBody.id = 'earthSkillsBody';
+    const heldRow = document.createElement('div'); heldRow.className = 'row';
+    const heldCopy = document.createElement('span'); heldCopy.className = 'grow';
+    heldCopy.textContent = 'Reading the review queue…';
+    heldRow.append(heldCopy); heldBody.append(heldRow);
+    held.append(heldTitle, heldBody);
+    root.append(held);
 
     const ledger = document.createElement('div'); ledger.className = 'pane-card';
     const title = document.createElement('h3'); title.textContent = 'LIVE COMMUNITY LEARNING LEDGER';
@@ -1220,6 +1230,57 @@ layers.sort((a, b) => a.d - b.d).forEach(l => l.draw());
       ? 'That reference was already recorded, so nothing moved a second time.'
       : (action === 'mint' ? 'Minted into the public Treasury.' : 'Granted from the Treasury.'));
     await loadTreasury();
+  }
+
+  async function loadEarthSkills() {
+    const body = $('earthSkillsBody');
+    if (!body) return;
+    if (!window.__earthProfile) {
+      body.innerHTML = '<div class="row"><span class="grow"><small>Connect your agent to see packages held for review.</small></span></div>';
+      return;
+    }
+    try {
+      const response = await fetch('/api/approvals', { headers:{ Accept:'application/json' } });
+      const data = await response.json();
+      const rows = (data.approvals || []).filter(row => row.kind === 'package_install' && row.state === 'pending');
+      if (!rows.length) {
+        body.innerHTML = '<div class="row"><span class="grow"><small>Nothing is held. Packages that pass the safety review install on their own; anything that can act on your machine waits here.</small></span></div>';
+        return;
+      }
+      body.replaceChildren(...rows.map(row => {
+        const wrapper = document.createElement('div'); wrapper.className = 'row';
+        const grow = document.createElement('span'); grow.className = 'grow';
+        const name = document.createElement('b');
+        name.textContent = `${row.payload?.name || 'package'} · ${(row.payload?.flags || []).join(', ') || 'held for review'}`;
+        const note = document.createElement('small');
+        note.style.cssText = 'white-space:pre-wrap;display:block;margin-top:6px';
+        note.textContent = row.detail || '';
+        grow.append(name, note);
+        const approve = document.createElement('button');
+        approve.className = 'mini-btn go'; approve.type = 'button'; approve.textContent = 'Approve';
+        approve.onclick = () => decideEarthSkill(row.id, 'approve');
+        const decline = document.createElement('button');
+        decline.className = 'mini-btn'; decline.type = 'button'; decline.textContent = 'Decline';
+        decline.onclick = () => decideEarthSkill(row.id, 'decline');
+        wrapper.append(grow, approve, decline);
+        return wrapper;
+      }));
+    } catch (error) {
+      body.innerHTML = '<div class="row"><span class="grow"><small>The review queue is temporarily unreachable.</small></span></div>';
+    }
+  }
+
+  async function decideEarthSkill(approvalId, decision) {
+    const response = await fetch('/api/approval', {
+      method:'POST', headers:{ 'Content-Type':'application/json', Accept:'application/json' },
+      body:JSON.stringify({ approvalId, decision }),
+    });
+    const data = await response.json().catch(() => ({ ok:false }));
+    if (!data.ok) return toast(data.why || 'That decision was refused safely.');
+    toast(decision === 'approve'
+      ? 'Approved. Your agent installs it on the next Earth pulse — nothing installed yet.'
+      : 'Declined. It stays out of your coding agents.');
+    await loadEarthSkills();
   }
 
   async function refreshSession() {
