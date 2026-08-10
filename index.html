@@ -129,7 +129,10 @@
                   background:var(--research); box-shadow:-18px 0 var(--research),0 -18px var(--research),-36px -18px var(--research),-18px -36px var(--research); pointer-events:none; }
   .speak h2 { position:relative; z-index:1; color:var(--ink); opacity:1; }
   .civic-list { position:relative; z-index:1; display:grid; grid-template-columns:1fr 1fr; gap:7px; }
-  .civic-row { min-width:0; padding:8px 9px; border:2px solid var(--ink); background:var(--paper); box-shadow:2px 2px 0 var(--ink); }
+  .civic-row { min-width:0; display:grid; grid-template-columns:34px minmax(0,1fr); gap:8px; align-items:center;
+               padding:7px 9px; border:2px solid var(--ink); background:var(--paper); box-shadow:2px 2px 0 var(--ink); }
+  .civic-face { width:34px; height:34px; object-fit:cover; object-position:50% 22%; image-rendering:pixelated;
+                border:2px solid var(--ink); background:#fff; }
   .civic-head { display:flex; align-items:center; justify-content:space-between; gap:6px; font:800 10px/1 var(--mono); }
   .civic-role { padding:2px 4px; color:var(--paper); background:#3A2A1E; border:1px solid var(--ink); font:800 7px/1 var(--mono); }
   .civic-copy { display:block; margin-top:5px; font-size:10.5px; line-height:1.25; }
@@ -233,10 +236,12 @@
   <div class="tile speak" id="speakTile">
     <h2><span class="dot" style="background:var(--research)"></span> CIVIC NETWORK · LIVE ROLES</h2>
     <div class="civic-list">
-      <div class="civic-row"><span class="civic-head">Sage <span class="civic-role">GREETER</span></span><span class="civic-copy">Welcomes and orients every new citizen.</span></div>
-      <div class="civic-row"><span class="civic-head">Terra <span class="civic-role">LAND</span></span><span class="civic-copy">Protects plots and prevents overlap.</span></div>
-      <div class="civic-row"><span class="civic-head">Tock <span class="civic-role">BUILD</span></span><span class="civic-copy">Checks native building footprints.</span></div>
-      <div class="civic-row"><span class="civic-head">Sam <span class="civic-role">MAYOR</span></span><span class="civic-copy">Approves routine work and escalates strict requests.</span></div>
+      <div class="civic-row"><img class="civic-face" src="/committee/sam.png" alt="Sam pixel portrait"><span><span class="civic-head">Sam <span class="civic-role">MAYOR</span></span><span class="civic-copy">Approves routine work and escalates strict requests.</span></span></div>
+      <div class="civic-row"><img class="civic-face" src="/committee/sage.png" alt="Sage pixel portrait"><span><span class="civic-head">Sage <span class="civic-role">GREETER</span></span><span class="civic-copy">Welcomes and orients every new citizen.</span></span></div>
+      <div class="civic-row"><img class="civic-face" src="/committee/terra.png" alt="Terra pixel portrait"><span><span class="civic-head">Terra <span class="civic-role">LAND</span></span><span class="civic-copy">Protects plots and prevents overlap.</span></span></div>
+      <div class="civic-row"><img class="civic-face" src="/committee/tock.png" alt="Tock pixel portrait"><span><span class="civic-head">Tock <span class="civic-role">BUILD</span></span><span class="civic-copy">Checks native building footprints.</span></span></div>
+      <div class="civic-row"><img class="civic-face" src="/committee/aegis.png" alt="Aegis pixel portrait"><span><span class="civic-head">Aegis <span class="civic-role">WARDEN</span></span><span class="civic-copy">De-escalates and keeps every citizen safe.</span></span></div>
+      <div class="civic-row"><img class="civic-face" src="/committee/atlas.png" alt="Atlas pixel portrait"><span><span class="civic-head">Atlas <span class="civic-role">SURVEY</span></span><span class="civic-copy">Opens protected growth rings as Earth expands.</span></span></div>
     </div>
   </div>
 
