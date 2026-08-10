@@ -1242,16 +1242,22 @@ layers.sort((a, b) => a.d - b.d).forEach(l => l.draw());
     try {
       const response = await fetch('/api/approvals', { headers:{ Accept:'application/json' } });
       const data = await response.json();
-      const rows = (data.approvals || []).filter(row => row.kind === 'package_install' && row.state === 'pending');
+      // The Kernel only ever returns pending approvals, and it projects a
+      // narrow packageReview for the kinds that have a review surface.
+      const rows = (data.approvals || []).filter(row => row.kind === 'package_install' || row.kind === 'package_release');
       if (!rows.length) {
-        body.innerHTML = '<div class="row"><span class="grow"><small>Nothing is held. Packages that pass the safety review install on their own; anything that can act on your machine waits here.</small></span></div>';
+        body.innerHTML = '<div class="row"><span class="grow"><small>Nothing is waiting. Packages that pass the safety review install on their own; anything that can act on your machine, or any knowledge about to leave your agent, waits here.</small></span></div>';
         return;
       }
       body.replaceChildren(...rows.map(row => {
         const wrapper = document.createElement('div'); wrapper.className = 'row';
         const grow = document.createElement('span'); grow.className = 'grow';
         const name = document.createElement('b');
-        name.textContent = `${row.payload?.name || 'package'} · ${(row.payload?.flags || []).join(', ') || 'held for review'}`;
+        const review = row.packageReview || {};
+        const heading = row.kind === 'package_release'
+          ? `Release ${review.name || 'a package'} to ${review.counterpartId || 'another citizen'}`
+          : `${review.name || 'package'} · ${(review.flags || []).join(', ') || 'held for review'}`;
+        name.textContent = heading;
         const note = document.createElement('small');
         note.style.cssText = 'white-space:pre-wrap;display:block;margin-top:6px';
         note.textContent = row.detail || '';
