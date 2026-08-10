@@ -1,6 +1,12 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 
+// The dashboard's endpoints are one router behind a rewrite. Tests ask for an
+// endpoint by the same name the browser uses, so every assertion below still
+// describes the URL a real request hits.
+const router = require('../api/earth');
+const endpoint = (op) => (req, res) => router({ ...req, query: { ...(req.query || {}), op } }, res);
+
 function response() {
   return {
     headers: {}, statusCode: 200, body: null,
@@ -16,7 +22,7 @@ test('claim proxy stores the owner ticket only in an HTTP-only cookie', async ()
     ok: true, ownerSession: 'secret-owner-ticket', profile: { agentId: 'agent:a', agentName: 'A', ownerName: 'Owner' },
   }), { status: 200, headers: { 'content-type': 'application/json' } });
   try {
-    const handler = require('../api/claim');
+    const handler = endpoint('claim');
     const req = { method: 'POST', headers: { origin: 'https://home.test', host: 'home.test' }, body: { claimToken: 'EARTH-valid' } };
     const res = response();
     await handler(req, res);
@@ -32,7 +38,7 @@ test('claim proxy stores the owner ticket only in an HTTP-only cookie', async ()
 });
 
 test('claim proxy refuses cross-site mutation requests', async () => {
-  const handler = require('../api/claim');
+  const handler = endpoint('claim');
   const req = { method: 'POST', headers: { origin: 'https://evil.test', host: 'home.test' }, body: { claimToken: 'EARTH-any' } };
   const res = response();
   await handler(req, res);
@@ -48,7 +54,7 @@ test('session proxy forwards only the opaque owner cookie as bearer authority', 
     return new Response(JSON.stringify({ ok: true, profile: { agentId: 'agent:a' } }), { status: 200 });
   };
   try {
-    const handler = require('../api/session');
+    const handler = endpoint('session');
     const req = { method: 'GET', headers: { cookie: 'earth_owner=opaque-ticket' } };
     const res = response();
     await handler(req, res);
@@ -67,7 +73,7 @@ test('governance proxy requires same-origin founder authority and forwards only 
     return new Response(JSON.stringify({ ok: true, landPolicy: 'founder_review' }), { status: 200 });
   };
   try {
-    const handler = require('../api/governance');
+    const handler = endpoint('governance');
     const req = {
       method: 'POST', headers: { origin: 'https://home.test', host: 'home.test', cookie: 'earth_owner=founder-ticket' },
       body: { landPolicy: 'founder_review' },
@@ -94,7 +100,7 @@ test('owner notification center reads and marks private notices with cookie auth
     return new Response(JSON.stringify({ ok: true, notifications: [] }), { status: 200 });
   };
   try {
-    const handler = require('../api/notifications');
+    const handler = endpoint('notifications');
     const headers = { origin: 'https://home.test', host: 'home.test', cookie: 'earth_owner=owner-ticket' };
     await handler({ method: 'GET', headers }, response());
     await handler({ method: 'POST', headers }, response());
@@ -114,7 +120,7 @@ test('autonomy proxy accepts only bounded standing-consent modes', async () => {
     return new Response(JSON.stringify({ ok: true, autonomy: body.autonomy }), { status: 200 });
   };
   try {
-    const handler = require('../api/autonomy');
+    const handler = endpoint('autonomy');
     const req = { method: 'POST', headers: { origin: 'https://home.test', host: 'home.test', cookie: 'earth_owner=owner-ticket' }, body: { autonomy: 'active' } };
     const ok = response(); await handler(req, ok);
     assert.deepEqual(body, { autonomy: 'active' });
@@ -131,7 +137,7 @@ test('skill policy proxy allows only bounded owner learning modes', async () => 
     body = JSON.parse(options.body);
     return new Response(JSON.stringify({ ok: true, skillPolicy: body.skillPolicy }), { status: 200 });
   };
-  const handler = require('../api/skill-policy');
+  const handler = endpoint('skill-policy');
   const req = { method: 'POST', headers: { origin: 'https://home.test', host: 'home.test', cookie: 'earth_owner=owner-ticket' }, body: { skillPolicy: 'ask_all' } };
   const good = response(); await handler(req, good);
   assert.deepEqual(body, { skillPolicy: 'ask_all' });
@@ -144,7 +150,7 @@ test('skills proxy keeps the owner ticket server-side', async () => {
     assert.equal(options.headers.Authorization, 'Bearer owner-ticket');
     return new Response(JSON.stringify({ ok: true, skills: [] }), { status: 200 });
   };
-  const handler = require('../api/skills');
+  const handler = endpoint('skills');
   const res = response();
   await handler({ method: 'GET', headers: { cookie: 'earth_owner=owner-ticket' } }, res);
   assert.equal(res.body.ok, true);
@@ -155,7 +161,7 @@ test('mayor nomination proxy validates a registered agent id', async () => {
   const original = global.fetch;
   global.fetch = async () => new Response(JSON.stringify({ ok: true, state: 'pending' }), { status: 200 });
   try {
-    const handler = require('../api/mayor');
+    const handler = endpoint('mayor');
     const req = { method: 'POST', headers: { origin: 'https://home.test', host: 'home.test', cookie: 'earth_owner=founder-ticket' }, body: { targetAgentId: 'agent:trusted-candidate' } };
     const ok = response(); await handler(req, ok); assert.equal(ok.statusCode, 200);
     const bad = response(); await handler({ ...req, body: { targetAgentId: 'not-an-agent' } }, bad); assert.equal(bad.statusCode, 400);
@@ -172,7 +178,7 @@ test('event RSVP proxy requires the owner cookie and forwards a bounded invitati
     return new Response(JSON.stringify({ ok: true, eventId: 'event:abc', status: 'accepted' }), { status: 200 });
   };
   try {
-    const handler = require('../api/event-rsvp');
+    const handler = endpoint('event-rsvp');
     const req = {
       method: 'POST', headers: { origin: 'https://home.test', host: 'home.test', cookie: 'earth_owner=owner-ticket' },
       body: { eventId: 'event:abc', decision: 'accept' },
