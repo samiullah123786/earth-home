@@ -389,3 +389,67 @@ test('the market proxy refuses writes and malformed ids', async () => {
   await endpoint('market')({ method: 'GET', headers: { host: 'home.test' }, query: { id: '../v1/owner/wallet' } }, bad);
   assert.equal(bad.statusCode, 400);
 });
+
+
+// -- The MCP prober stays read-only and refuses the dangerous shapes --------
+test('the prober refuses non-https, private, and Earth-internal hosts', async () => {
+  const cases = [
+    ['http://example.com/mcp', /https only/],
+    ['https://user:pw@example.com/mcp', /credentials/],
+    ['https://example.com:8080/mcp', /custom ports/],
+    ['https://10.0.0.1/mcp', /IP-literal/],
+    ['https://localhost/mcp', /bare hostnames/],
+    ['https://myserver.internal/mcp', /private-shaped/],
+    ['https://kernel.agentsearth.com/mcp', /Earth itself/],
+  ];
+  for (const [url, why] of cases) {
+    const res = response();
+    await endpoint('probe')({ method: 'POST', ...owned({ body: { url } }) }, res);
+    assert.equal(res.statusCode, 400, url + ' must be refused');
+    assert.match(res.body.why, why);
+  }
+});
+
+test('the prober reports a dead endpoint as not alive rather than erroring', async () => {
+  const original = global.fetch;
+  global.fetch = async () => { throw Object.assign(new Error('nope'), { name: 'TypeError' }); };
+  try {
+    const res = response();
+    await endpoint('probe')({ method: 'POST', ...owned({ body: { url: 'https://example.com/mcp' } }) }, res);
+    assert.equal(res.statusCode, 200);
+    assert.equal(res.body.alive, false);
+  } finally { global.fetch = original; }
+});
+
+test('the prober does a real read-only handshake and never calls a tool', async () => {
+  const calls = [];
+  const original = global.fetch;
+  global.fetch = async (url, init) => {
+    const body = JSON.parse(init.body);
+    calls.push(body.method);
+    const result = body.method === 'initialize'
+      ? { protocolVersion: '2025-06-18', serverInfo: { name: 'demo', version: '2.1' } }
+      : { tools: [{ name: 'search' }, { name: 'fetch' }] };
+    return new Response(JSON.stringify({ jsonrpc: '2.0', id: body.id, result }),
+      { status: 200, headers: { 'content-type': 'application/json', 'mcp-session-id': 's1' } });
+  };
+  try {
+    const res = response();
+    await endpoint('probe')({ method: 'POST', ...owned({ body: { url: 'https://example.com/mcp' } }) }, res);
+    assert.equal(res.body.alive, true);
+    assert.equal(res.body.serverName, 'demo');
+    assert.equal(res.body.toolCount, 2);
+    assert.deepEqual(calls, ['initialize', 'tools/list']);
+    assert.ok(!calls.includes('tools/call'), 'the prober must never call a tool');
+  } finally { global.fetch = original; }
+});
+
+test('the prober refuses a cross-site origin', async () => {
+  const res = response();
+  await endpoint('probe')({
+    method: 'POST',
+    headers: { origin: 'https://evil.test', host: 'home.test', cookie: 'earth_owner=t' },
+    body: { url: 'https://example.com/mcp' },
+  }, res);
+  assert.equal(res.statusCode, 403);
+});

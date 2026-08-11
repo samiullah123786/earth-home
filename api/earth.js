@@ -261,6 +261,90 @@ async function manager(req, res) {
 }
 
 /**
+ * The MCP handshake prober: proof an endpoint is alive, without running it.
+ *
+ * Read-only by construction - it speaks only `initialize` and `tools/list`,
+ * never `tools/call`. HTTPS only, redirects refused, no credentials, no custom
+ * ports, private-shaped hosts rejected before a packet leaves, and Earth's own
+ * domain refused so the prober can never be turned against us. This runs on
+ * Vercel rather than the Kernel deliberately: the droplet hosts our backend,
+ * and outbound fetches from it to publisher URLs would be an SSRF path inward.
+ */
+const PROBE_TIMEOUT_MS = 6_000;
+
+function refuseProbeUrl(raw) {
+  let url;
+  try { url = new URL(String(raw ?? '')); } catch { return 'that is not a URL'; }
+  if (url.protocol !== 'https:') return 'https only';
+  if (url.username || url.password) return 'no credentials in probe URLs';
+  if (url.port && url.port !== '443') return 'no custom ports';
+  const host = url.hostname.toLowerCase();
+  if (/^\d+\.\d+\.\d+\.\d+$/.test(host) || host.includes(':')) return 'no IP-literal hosts';
+  if (!host.includes('.')) return 'no bare hostnames';
+  if (/(^|\.)(localhost|local|internal|lan|home|corp|intranet)$/.test(host)) return 'no private-shaped hosts';
+  if (host === 'agentsearth.com' || host.endsWith('.agentsearth.com')) return 'the prober does not probe Earth itself';
+  return null;
+}
+
+async function mcpRpc(url, sessionId, method, params, id) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), PROBE_TIMEOUT_MS);
+  try {
+    const response = await fetch(url, {
+      method: 'POST', redirect: 'manual', signal: controller.signal,
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json, text/event-stream',
+        ...(sessionId ? { 'Mcp-Session-Id': sessionId } : {}),
+      },
+      body: JSON.stringify({ jsonrpc: '2.0', id, method, params }),
+    });
+    if (response.status >= 300 && response.status < 400) return { error: 'endpoint redirects; probes do not follow' };
+    const session = response.headers.get('mcp-session-id') || sessionId || null;
+    const raw = await response.text();
+    let payload = null;
+    try { payload = JSON.parse(raw); } catch {
+      const dataLine = raw.split('\n').find((line) => line.startsWith('data:'));
+      if (dataLine) { try { payload = JSON.parse(dataLine.slice(5)); } catch { /* fallthrough */ } }
+    }
+    if (!payload) return { error: `unparseable reply (${response.status})`, session };
+    return { result: payload.result || null, rpcError: payload.error || null, session };
+  } catch (error) {
+    return { error: error.name === 'AbortError' ? 'timed out' : 'unreachable' };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function probe(req, res) {
+  if (req.method !== 'POST') return send(res, 405, { ok: false, why: 'method not allowed' });
+  try { requireSameOrigin(req); } catch { return send(res, 403, { ok: false, why: 'same-origin only' }); }
+  const url = String(req.body?.url || '').trim();
+  const refusal = refuseProbeUrl(url);
+  if (refusal) return send(res, 400, { ok: false, why: refusal });
+
+  const hello = await mcpRpc(url, null, 'initialize', {
+    protocolVersion: '2025-06-18', capabilities: {},
+    clientInfo: { name: 'earth-market-prober', version: '1' },
+  }, 1);
+  if (hello.error) return send(res, 200, { ok: true, alive: false, why: hello.error });
+  if (hello.rpcError) return send(res, 200, { ok: true, alive: false, why: `server error: ${String(hello.rpcError.message || '').slice(0, 120)}` });
+
+  const info = hello.result?.serverInfo || {};
+  const listing = await mcpRpc(url, hello.session, 'tools/list', {}, 2);
+  const tools = Array.isArray(listing.result?.tools) ? listing.result.tools : [];
+  return send(res, 200, {
+    ok: true, alive: true,
+    protocolVersion: String(hello.result?.protocolVersion || '').slice(0, 40),
+    serverName: String(info.name || 'unnamed').slice(0, 80),
+    serverVersion: String(info.version || '').slice(0, 40),
+    toolCount: tools.length,
+    tools: tools.slice(0, 10).map((tool) => String(tool?.name || '').slice(0, 60)).filter(Boolean),
+    note: 'read-only handshake: initialize and tools/list, never tools/call',
+  });
+}
+
+/**
  * The public market, proxied same-origin for the browser page.
  *
  * The machine API at kernel.agentsearth.com/v1/market is the real surface and
@@ -346,7 +430,7 @@ async function governanceAi(req, res) {
   }
 }
 
-const HANDLERS = { claim, logout, notifications, letters, treasury, manager, overview, market, 'bank-ledger': bankLedger, 'governance-ai': governanceAi };
+const HANDLERS = { claim, logout, notifications, letters, treasury, manager, overview, market, probe, 'bank-ledger': bankLedger, 'governance-ai': governanceAi };
 
 module.exports = async function handler(req, res) {
   // The rewrite passes the original endpoint name; nothing else selects a route.
