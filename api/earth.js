@@ -103,7 +103,7 @@ async function claim(req, res) {
     const claimToken = String(req.body?.claimToken || '').trim();
     const result = await kernel('/v1/owner/claim', { method: 'POST', body: { claimToken } });
     if (!result.data.ok) return send(res, result.status, result.data);
-    setOwnerCookie(res, result.data.ownerSession);
+    setOwnerCookie(res, result.data.ownerSession, req);
     return send(res, 200, { ok: true, profile: result.data.profile });
   } catch (error) {
     return send(res, 400, { ok: false, why: error.message || 'claim failed' });
@@ -116,12 +116,12 @@ async function logout(req, res) {
     requireSameOrigin(req);
     const token = ownerToken(req);
     if (token) await kernel('/v1/owner/logout', { method: 'POST', token });
-    clearOwnerCookie(res);
+    clearOwnerCookie(res, req);
     return send(res, 200, { ok: true });
   } catch (error) {
     // The local session goes either way: a failed round trip must not strand
     // someone in a signed-in-looking page.
-    clearOwnerCookie(res);
+    clearOwnerCookie(res, req);
     return send(res, 400, { ok: false, why: error.message || 'logout failed' });
   }
 }
