@@ -289,3 +289,48 @@ test('the mailbox is closed to anyone without an owner cookie', async () => {
     assert.equal(res.statusCode, 401, `${op} must require an owner session`);
   }
 });
+
+// ── The Bank Manager's books stay Mayor-only, and the public Bank stays public ─
+test('the public bank route is not shadowed by the Mayor bank ledger', async () => {
+  const spy = captureKernel({ ok: true, assets: [] });
+  try {
+    const res = response();
+    await endpoint('bank')({ method: 'GET', headers: { host: 'home.test' } }, res);
+    // Anonymous, and pointed at the PUBLIC bank - not the Mayor's ledger.
+    assert.equal(res.statusCode, 200);
+    assert.match(spy.calls[0].url, /\/v1\/bank$/);
+    assert.doesNotMatch(spy.calls[0].url, /mayor/);
+  } finally { spy.restore(); }
+});
+
+test('the bank ledger refuses anyone without an owner session', async () => {
+  const res = response();
+  await endpoint('bank-ledger')({ method: 'GET', headers: { host: 'home.test' } }, res);
+  assert.equal(res.statusCode, 401);
+});
+
+test('the bank ledger forwards only whole-number dials and refuses an empty turn', async () => {
+  const spy = captureKernel();
+  try {
+    const good = response();
+    await endpoint('bank-ledger')({ method: 'POST', ...owned({ body: { dailyStipend: 40, feeBasisPoints: 1.5 } }) }, good);
+    assert.equal(good.statusCode, 200);
+    // The fractional dial is dropped rather than forwarded.
+    assert.deepEqual(spy.calls[0].body, { dailyStipend: 40 });
+
+    const empty = response();
+    await endpoint('bank-ledger')({ method: 'POST', ...owned({ body: { dailyStipend: 'lots' } }) }, empty);
+    assert.equal(empty.statusCode, 400);
+    assert.match(empty.body.why, /name a dial/);
+  } finally { spy.restore(); }
+});
+
+test('turning a dial refuses a cross-site origin', async () => {
+  const res = response();
+  await endpoint('bank-ledger')({
+    method: 'POST',
+    headers: { origin: 'https://evil.test', host: 'home.test', cookie: 'earth_owner=ticket' },
+    body: { dailyStipend: 0 },
+  }, res);
+  assert.equal(res.statusCode, 403);
+});

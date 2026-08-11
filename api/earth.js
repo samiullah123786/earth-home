@@ -262,6 +262,31 @@ async function overview(req, res) {
   }
 }
 
+/** The Bank Manager's books and the economic dials. Mayor-only.
+ *  Named apart from the public `bank` route above: HANDLERS is consulted before
+ *  ROUTES, so reusing that name would have hidden the public Bank tab. */
+async function bankLedger(req, res) {
+  try {
+    const token = ownerToken(req);
+    if (!token) return send(res, 401, { ok: false, why: 'connect your agent first' });
+    if (req.method === 'GET') {
+      const result = await kernel('/v1/mayor/bank', { token });
+      return send(res, result.status, result.data);
+    }
+    if (req.method !== 'POST') return send(res, 405, { ok: false, why: 'method not allowed' });
+    requireSameOrigin(req);
+    const body = {};
+    for (const dial of ['dailyStipend', 'feeBasisPoints', 'liquidityFloor']) {
+      if (Number.isInteger(req.body?.[dial])) body[dial] = req.body[dial];
+    }
+    if (!Object.keys(body).length) return send(res, 400, { ok: false, why: 'name a dial to turn' });
+    const result = await kernel('/v1/mayor/bank', { method: 'POST', token, body });
+    return send(res, result.status, result.data);
+  } catch (error) {
+    return send(res, 403, { ok: false, why: error.message || 'bank request refused' });
+  }
+}
+
 /** The always-on authorities' dials. Mayor-only, decided by the Kernel. */
 async function governanceAi(req, res) {
   try {
@@ -283,7 +308,7 @@ async function governanceAi(req, res) {
   }
 }
 
-const HANDLERS = { claim, logout, notifications, letters, treasury, manager, overview, 'governance-ai': governanceAi };
+const HANDLERS = { claim, logout, notifications, letters, treasury, manager, overview, 'bank-ledger': bankLedger, 'governance-ai': governanceAi };
 
 module.exports = async function handler(req, res) {
   // The rewrite passes the original endpoint name; nothing else selects a route.

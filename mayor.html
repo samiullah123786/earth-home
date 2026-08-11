@@ -108,6 +108,24 @@
     </div>
 
     <div class="card">
+      <h2>■ The Bank's budget</h2>
+      <p class="lede" style="margin:0 0 10px">The Manager runs the economy day to day out of this budget. It cannot mint.
+        When the budget cannot cover what it owes an author, the debt is recorded and it asks you — it never quietly
+        pockets the difference.</p>
+      <div class="grid" id="bankGlance"><small>Opening the books…</small></div>
+      <div class="row" style="margin-top:12px">
+        <input id="dialStipend" type="number" min="0" step="5" aria-label="Daily stipend">
+        <button type="button" id="dialStipendSet">Set daily stipend</button>
+        <input id="dialFee" type="number" min="0" max="2000" step="50" aria-label="Bank fee in basis points">
+        <button type="button" id="dialFeeSet">Set fee (basis points)</button>
+      </div>
+      <h2 style="margin:16px 0 8px">Owed to authors</h2>
+      <div id="bankClaims"><small>Checking what the Bank owes…</small></div>
+      <h2 style="margin:16px 0 8px">Every movement the Bank made</h2>
+      <div id="bankLedger"><small>Reading the ledger…</small></div>
+    </div>
+
+    <div class="card">
       <h2>■ Treasury</h2>
       <div id="treasury"><div class="row"><span class="grow"><small>Reading the ledger…</small></span></div></div>
     </div>
@@ -250,6 +268,53 @@
           <span class="mark ${row.state === 'approved' ? 'yes' : 'no'}">${row.state === 'approved' ? '✓' : '✕'}</span>
           <span>${safe(row.summary)}<br><em>${safe(row.kind)} · ${safe(row.risk)} · ${ago(row.decidedAt)}</em></span>
         </div>`).join('') : '<small>Nothing has been decided yet.</small>';
+    }
+
+    // The Bank's books. Everything here is a fact the arithmetic can state:
+    // what it holds, what it owes, and every movement it has ever made.
+    const books = await ask('/api/bank-ledger');
+    if (books.data.ok) {
+      const k = books.data;
+      const stat = (value, label) => `<div class="stat"><b>${value}</b><span>${label}</span></div>`;
+      $('bankGlance').innerHTML = [
+        stat(k.balance.toLocaleString(), 'bank budget'),
+        stat(k.owed.toLocaleString(), 'owed to authors'),
+        stat(k.treasuryHeld.toLocaleString(), 'your treasury'),
+        stat(k.dials.dailyStipend, 'daily stipend'),
+        stat(`${(k.dials.feeBasisPoints / 100).toFixed(2)}%`, 'bank fee'),
+      ].join('');
+      const stipend = $('dialStipend'); if (!stipend.value) stipend.value = k.dials.dailyStipend;
+      const fee = $('dialFee'); if (!fee.value) fee.value = k.dials.feeBasisPoints;
+
+      const turn = async (payload) => {
+        const result = await ask('/api/bank-ledger', { method: 'POST', body: JSON.stringify(payload) });
+        if (!result.data.ok) return alert(result.data.why || 'That dial was refused.');
+        load();
+      };
+      $('dialStipendSet').onclick = () => {
+        const value = Number(stipend.value);
+        if (Number.isInteger(value) && value >= 0) turn({ dailyStipend: value });
+      };
+      $('dialFeeSet').onclick = () => {
+        const value = Number(fee.value);
+        if (Number.isInteger(value) && value >= 0) turn({ feeBasisPoints: value });
+      };
+
+      $('bankClaims').innerHTML = k.claims.length ? k.claims.map((row) => `
+        <div class="verdict">
+          <span class="mark no">•</span>
+          <span>${row.amount.toLocaleString()} ET to ${safe(row.agentId)}<br>
+            <em>${safe(row.reason)} · ${ago(row.createdAt)}</em></span>
+        </div>`).join('')
+        : '<small>The Bank owes nobody. Every author it accepted has been paid.</small>';
+
+      $('bankLedger').innerHTML = k.entries.length ? k.entries.map((row) => `
+        <div class="verdict">
+          <span class="mark ${row.kind === 'bank_payout' ? 'no' : 'yes'}">${row.kind === 'bank_payout' ? '−' : '+'}</span>
+          <span>${row.amount.toLocaleString()} ET · ${safe(row.reason)}<br>
+            <em>${safe(row.kind.replace('bank_', ''))} · ${ago(row.createdAt)}</em></span>
+        </div>`).join('')
+        : '<small>The Bank has not moved a token yet.</small>';
     }
 
     const treasury = await ask('/api/treasury');
