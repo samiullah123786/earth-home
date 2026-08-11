@@ -196,3 +196,96 @@ test('event RSVP proxy requires the owner cookie and forwards a bounded invitati
     global.fetch = original;
   }
 });
+
+// ── The mailbox and the notification tidying verbs ─────────────────────────
+const captureKernel = (reply = { ok: true }) => {
+  const calls = [];
+  const original = global.fetch;
+  global.fetch = async (url, init) => {
+    calls.push({ url: String(url), method: init?.method || 'GET', body: init?.body ? JSON.parse(init.body) : null });
+    return new Response(JSON.stringify(reply), { status: 200, headers: { 'content-type': 'application/json' } });
+  };
+  return { calls, restore: () => { global.fetch = original; } };
+};
+const owned = (extra = {}) => ({
+  headers: { origin: 'https://home.test', host: 'home.test', cookie: 'earth_owner=ticket' },
+  ...extra,
+});
+
+test('letters proxy asks the Kernel for the mailbox and never for a bare log', async () => {
+  const spy = captureKernel({ ok: true, inbox: [], sent: [], unread: 0 });
+  try {
+    const res = response();
+    await endpoint('letters')({ method: 'GET', ...owned() }, res);
+    assert.equal(res.statusCode, 200);
+    assert.match(spy.calls[0].url, /\/v1\/owner\/letters$/);
+  } finally { spy.restore(); }
+});
+
+test('letters proxy refuses a letter id that is not a letter id', async () => {
+  const res = response();
+  await endpoint('letters')({ method: 'POST', ...owned({ body: { messageId: 'approval:sneaky' } }) }, res);
+  assert.equal(res.statusCode, 400);
+  assert.match(res.body.why, /invalid letter id/);
+});
+
+test('letters proxy marks the whole inbox when given no id', async () => {
+  const spy = captureKernel({ ok: true, read: 3 });
+  try {
+    const res = response();
+    await endpoint('letters')({ method: 'POST', ...owned({ body: {} }) }, res);
+    assert.equal(res.statusCode, 200);
+    assert.match(spy.calls[0].url, /\/v1\/owner\/letters\/read$/);
+    assert.deepEqual(spy.calls[0].body, {});
+  } finally { spy.restore(); }
+});
+
+test('mailbox and notification writes refuse a cross-site origin', async () => {
+  for (const op of ['letters', 'notifications']) {
+    const res = response();
+    await endpoint(op)({
+      method: 'POST',
+      headers: { origin: 'https://evil.test', host: 'home.test', cookie: 'earth_owner=ticket' },
+      body: {},
+    }, res);
+    assert.equal(res.statusCode, 400, `${op} must refuse a cross-site write`);
+  }
+});
+
+test('notifications proxy routes read, dismiss, and clear to distinct Kernel paths', async () => {
+  const spy = captureKernel();
+  try {
+    const read = response();
+    await endpoint('notifications')({ method: 'POST', ...owned({ body: {} }) }, read);
+    assert.match(spy.calls[0].url, /\/notifications\/read$/);
+
+    const dismiss = response();
+    await endpoint('notifications')({ method: 'POST', ...owned({ body: { action: 'dismiss', notificationId: 'abc' } }) }, dismiss);
+    assert.match(spy.calls[1].url, /\/notifications\/dismiss$/);
+    assert.equal(spy.calls[1].body.notificationId, 'abc');
+
+    const clear = response();
+    await endpoint('notifications')({ method: 'POST', ...owned({ body: { action: 'clear' } }) }, clear);
+    assert.match(spy.calls[2].url, /\/notifications\/clear$/);
+  } finally { spy.restore(); }
+});
+
+test('notifications proxy refuses an unknown action and a dismiss with no target', async () => {
+  const bogus = response();
+  await endpoint('notifications')({ method: 'POST', ...owned({ body: { action: 'delete-everything' } }) }, bogus);
+  assert.equal(bogus.statusCode, 400);
+  assert.match(bogus.body.why, /read, dismiss, or clear/);
+
+  const empty = response();
+  await endpoint('notifications')({ method: 'POST', ...owned({ body: { action: 'dismiss' } }) }, empty);
+  assert.equal(empty.statusCode, 400);
+  assert.match(empty.body.why, /name the notification/);
+});
+
+test('the mailbox is closed to anyone without an owner cookie', async () => {
+  for (const op of ['letters', 'notifications']) {
+    const res = response();
+    await endpoint(op)({ method: 'GET', headers: { host: 'home.test' } }, res);
+    assert.equal(res.statusCode, 401, `${op} must require an owner session`);
+  }
+});

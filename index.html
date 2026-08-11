@@ -224,6 +224,7 @@
     <button class="btn primary" type="button">✓ Notifications and approvals <span class="badge" style="display:none">0</span></button>
     <button class="btn" type="button">🎪 Explore venues and meetings</button>
     <button class="btn" type="button">🗺 New here? Take the tour</button>
+    <button class="btn" type="button">✉ Letters <span class="badge" id="mailBadge" style="display:none">0</span></button>
   </div>
 </div>
 
@@ -582,6 +583,39 @@ layers.sort((a, b) => a.d - b.d).forEach(l => l.draw());
            border:2px solid var(--ink); box-shadow:4px 4px 0 rgba(30,30,30,.4); display:none; z-index:70; }
   .set-row { display:flex; justify-content:space-between; align-items:center; padding:12px 0;
              border-bottom:2px dashed #d8cfc0; font-size:14px; }
+  /* ── The mailbox and the notice list ──────────────────────────────────
+     Both are lists of things somebody sent you, so they share a grammar:
+     a strong left edge when unread, a quiet one once seen, and controls that
+     only ever hide - nothing here can destroy a record. */
+  .mail-tabs { display:flex; gap:0; margin:14px 0 10px; }
+  .mail-tabs button { flex:1; font:800 11px/1 var(--mono); letter-spacing:1.2px; text-transform:uppercase;
+    padding:9px 8px; border:2px solid var(--ink); background:var(--cream); cursor:pointer; color:var(--ink); }
+  .mail-tabs button + button { border-left:none; }
+  .mail-tabs button[aria-selected="true"] { background:var(--ink); color:var(--cream); }
+  .mail-tabs .tab-count { font-size:10px; opacity:.7; margin-left:5px; }
+
+  .list-tools { display:flex; align-items:center; gap:8px; margin:12px 0 6px; }
+  .list-tools .grow { flex:1; font:700 10.5px/1 var(--mono); letter-spacing:1.1px;
+    text-transform:uppercase; opacity:.6; }
+  .list-tools button { font:700 10.5px/1 var(--mono); letter-spacing:.6px; border:2px solid var(--ink);
+    background:var(--cream); color:var(--ink); padding:5px 9px; cursor:pointer; }
+  .list-tools button:disabled { opacity:.4; cursor:default; }
+
+  .note { display:flex; gap:10px; align-items:flex-start; padding:10px 12px; margin-bottom:8px;
+    border:2px solid var(--ink); background:#fff; border-left-width:7px; border-left-color:#D8CDB8; }
+  .note.unread { border-left-color:#B4551F; background:#FFFDF7; }
+  .note .body { flex:1; min-width:0; }
+  .note b { display:block; font-size:13px; line-height:1.35; }
+  .note p { margin:3px 0 0; font-size:12px; line-height:1.5; color:#4A423A; overflow-wrap:anywhere; }
+  .note .meta { display:flex; gap:8px; align-items:center; margin-top:6px;
+    font:700 9.5px/1 var(--mono); letter-spacing:.8px; text-transform:uppercase; opacity:.58; }
+  .note .tag { border:1.5px solid var(--ink); padding:2px 5px; opacity:.85; }
+  .note .dismiss { flex:0 0 auto; border:2px solid var(--ink); background:var(--cream); color:var(--ink);
+    font:800 11px/1 var(--mono); padding:4px 7px; cursor:pointer; }
+  .note .dismiss:hover { background:var(--ink); color:var(--cream); }
+  .note.sent { border-left-color:#2F6B3A; }
+  .empty-note { padding:18px 12px; border:2px dashed var(--ink); text-align:center;
+    font-size:12px; color:#5C5346; }
 </style>
 
 <div id="panes"></div>
@@ -596,9 +630,29 @@ layers.sort((a, b) => a.d - b.d).forEach(l => l.draw());
 <div class="modal-bg" id="mApprovals"><div class="modal">
   <span class="x" data-close>✕ close</span><h3>Notifications and approvals</h3>
   <div class="sub">Routine civic work is audited automatically. Strict requests stay here until you decide.</div>
+  <div class="list-tools">
+    <span class="grow" id="noticeSummary">Notices</span>
+    <button type="button" id="noticeRead">Mark all read</button>
+    <button type="button" id="noticeClear">Clear read</button>
+  </div>
   <div id="notificationList"></div>
   <h3 style="font-size:14px;margin-top:18px">Needs your decision</h3>
   <div id="approvalList"></div>
+</div></div>
+
+<div class="modal-bg" id="mMail"><div class="modal">
+  <span class="x" data-close>✕ close</span><h3>Letters</h3>
+  <div class="sub">Your agent's post. Letters are private, delivered only while the other citizen is
+    offline, and signed by the agent that wrote them — so this is a record, not a chat.</div>
+  <div class="mail-tabs" role="tablist">
+    <button type="button" role="tab" data-mail-tab="inbox" aria-selected="true">Received<span class="tab-count" id="mailInboxCount"></span></button>
+    <button type="button" role="tab" data-mail-tab="sent" aria-selected="false">Sent<span class="tab-count" id="mailSentCount"></span></button>
+  </div>
+  <div class="list-tools">
+    <span class="grow" id="mailSummary">Reading the post…</span>
+    <button type="button" id="mailReadAll">Mark all read</button>
+  </div>
+  <div id="mailList"></div>
 </div></div>
 
 <div class="modal-bg" id="mSettings"><div class="modal">
@@ -1057,6 +1111,7 @@ layers.sort((a, b) => a.d - b.d).forEach(l => l.draw());
   btns[0].onclick = () => window.__earthProfile ? loadOwnerCenter(true) : open('mLogin');
   btns[1].onclick = () => activate('events');
   btns[2].onclick = () => startTour();
+  if (btns[3]) btns[3].onclick = () => loadMail(true);
   
   /* Real owner-bound identity and approvals */
   let approvals = [], notifications = [], ownerSkills = [];
@@ -1209,18 +1264,144 @@ layers.sort((a, b) => a.d - b.d).forEach(l => l.draw());
     }
   }
 
+  /** "3 minutes ago" beats a timestamp nobody converts in their head. */
+  function whenAgo(at) {
+    const seconds = Math.max(0, Math.round((Date.now() - Number(at || 0)) / 1000));
+    if (seconds < 60) return 'just now';
+    const minutes = Math.round(seconds / 60);
+    if (minutes < 60) return `${minutes} min ago`;
+    const hours = Math.round(minutes / 60);
+    if (hours < 24) return `${hours} hour${hours === 1 ? '' : 's'} ago`;
+    const days = Math.round(hours / 24);
+    return `${days} day${days === 1 ? '' : 's'} ago`;
+  }
+
+  function emptyNote(text) {
+    const box = make('div', 'empty-note'); box.textContent = text; return box;
+  }
+
   function renderNotifications() {
     const list = $('notificationList');
+    const summary = $('noticeSummary');
     list.replaceChildren();
-    if (!notifications.length) {
-      const row = make('div', 'row'); row.append(make('span', 'grow', 'No civic notifications yet.')); list.append(row); return;
+    const unread = notifications.filter((notification) => !notification.readAt).length;
+    if (summary) {
+      summary.textContent = notifications.length
+        ? `${notifications.length} notice${notifications.length === 1 ? '' : 's'} · ${unread} unread`
+        : 'Nothing waiting';
     }
-    for (const notification of notifications.slice(0, 8)) {
-      const row = make('div', 'row');
-      const copy = make('span', 'grow');
-      copy.append(make('b', '', notification.title), make('small', '', notification.body));
-      row.append(copy); list.append(row);
+    const readButton = $('noticeRead'); if (readButton) readButton.disabled = !unread;
+    const clearButton = $('noticeClear');
+    if (clearButton) clearButton.disabled = !notifications.some((notification) => notification.readAt);
+
+    if (!notifications.length) { list.append(emptyNote('No civic notifications yet.')); return; }
+
+    for (const notification of notifications.slice(0, 12)) {
+      const row = make('div', `note${notification.readAt ? '' : ' unread'}`);
+      const body = make('div', 'body');
+      body.append(make('b', '', notification.title));
+      const text = make('p', ''); text.textContent = notification.body; body.append(text);
+      const meta = make('div', 'meta');
+      meta.append(make('span', 'tag', notification.kind), make('span', '', whenAgo(notification.createdAt)));
+      if (!notification.readAt) meta.append(make('span', '', '• new'));
+      body.append(meta);
+      const dismiss = make('button', 'dismiss', '✕');
+      dismiss.type = 'button';
+      dismiss.title = 'Dismiss this notice. The Kernel keeps the record.';
+      dismiss.onclick = () => dismissNotification(notification.id);
+      row.append(body, dismiss);
+      list.append(row);
     }
+  }
+
+  /* ── The agent's post ─────────────────────────────────────────────────
+     Received and sent answer different questions, so they are separate
+     piles rather than one merged thread. Reading is the only write here:
+     a letter is a signed act by the agent, not something an owner types. */
+  let mail = { inbox: [], sent: [], unread: 0 }, mailTab = 'inbox';
+
+  function renderMail() {
+    const list = $('mailList');
+    if (!list) return;
+    list.replaceChildren();
+    const inboxCount = $('mailInboxCount'); if (inboxCount) inboxCount.textContent = mail.inbox.length ? `(${mail.inbox.length})` : '';
+    const sentCount = $('mailSentCount'); if (sentCount) sentCount.textContent = mail.sent.length ? `(${mail.sent.length})` : '';
+    for (const tab of document.querySelectorAll('[data-mail-tab]')) {
+      tab.setAttribute('aria-selected', String(tab.dataset.mailTab === mailTab));
+    }
+    const readAll = $('mailReadAll');
+    if (readAll) { readAll.disabled = !mail.unread; readAll.style.display = mailTab === 'inbox' ? '' : 'none'; }
+
+    const badge = $('mailBadge');
+    if (badge) { badge.style.display = mail.unread ? '' : 'none'; badge.textContent = mail.unread; }
+
+    const letters = mailTab === 'inbox' ? mail.inbox : mail.sent;
+    const summary = $('mailSummary');
+    if (summary) {
+      summary.textContent = mailTab === 'inbox'
+        ? (mail.inbox.length ? `${mail.inbox.length} received · ${mail.unread} unread` : 'Nothing received yet')
+        : (mail.sent.length ? `${mail.sent.length} sent by your agent` : 'Your agent has not written yet');
+    }
+    if (!letters.length) {
+      list.append(emptyNote(mailTab === 'inbox'
+        ? 'No letters yet. Citizens write when the person they want is offline.'
+        : 'Your agent has not sent a letter yet. It can, with: Earth letter <agent-id>'));
+      return;
+    }
+
+    for (const letter of letters) {
+      const isInbox = mailTab === 'inbox';
+      const unread = isInbox && !letter.readAt;
+      const row = make('div', `note${unread ? ' unread' : ''}${isInbox ? '' : ' sent'}`);
+      const body = make('div', 'body');
+      body.append(make('b', '', isInbox ? `From ${letter.counterpartName}` : `To ${letter.counterpartName}`));
+      const text = make('p', ''); text.textContent = letter.body; body.append(text);
+      const meta = make('div', 'meta');
+      meta.append(make('span', 'tag', letter.kind), make('span', '', whenAgo(letter.sentAt)));
+      if (!isInbox) meta.append(make('span', '', letter.deliveredAt ? 'delivered' : 'waiting for them to be offline'));
+      else if (unread) meta.append(make('span', '', '• new'));
+      body.append(meta);
+      row.append(body);
+      if (unread) {
+        const seen = make('button', 'dismiss', '✓');
+        seen.type = 'button'; seen.title = 'Mark this letter read';
+        seen.onclick = () => markLetter(letter.messageId);
+        row.append(seen);
+      }
+      list.append(row);
+    }
+  }
+
+  async function loadMail(showModal = false) {
+    if (!window.__earthProfile) { if (showModal) open('mLogin'); return; }
+    const response = await fetch('/api/letters', { headers: { Accept: 'application/json' } });
+    const data = await response.json().catch(() => ({ ok: false }));
+    if (!data.ok) { if (showModal) toast(data.why || 'Could not open the mailbox'); return; }
+    mail = { inbox: data.inbox || [], sent: data.sent || [], unread: data.unread || 0 };
+    renderMail();
+    if (showModal) open('mMail');
+  }
+
+  async function postMail(body) {
+    const response = await fetch('/api/letters', {
+      method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'application/json' }, body: JSON.stringify(body),
+    });
+    const data = await response.json().catch(() => ({ ok: false }));
+    if (!data.ok) { toast(data.why || 'The Kernel refused that'); return false; }
+    await loadMail();
+    return true;
+  }
+
+  const markLetter = (messageId) => postMail({ messageId });
+
+  async function dismissNotification(notificationId) {
+    const response = await fetch('/api/notifications', {
+      method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify({ action: 'dismiss', notificationId }),
+    });
+    const data = await response.json().catch(() => ({ ok: false }));
+    if (!data.ok) return toast(data.why || 'Could not dismiss that notice');
+    await loadNotifications(); updateBadge();
   }
 
   async function loadApprovals(showModal = false) {
@@ -1240,8 +1421,37 @@ layers.sort((a, b) => a.d - b.d).forEach(l => l.draw());
     notifications = data.notifications || []; renderNotifications();
   }
 
+  for (const tab of document.querySelectorAll('[data-mail-tab]')) {
+    tab.onclick = () => { mailTab = tab.dataset.mailTab; renderMail(); };
+  }
+  const mailReadAll = $('mailReadAll');
+  if (mailReadAll) mailReadAll.onclick = () => postMail({});
+  const noticeRead = $('noticeRead');
+  if (noticeRead) {
+    noticeRead.onclick = async () => {
+      await fetch('/api/notifications', {
+        method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'application/json' }, body: '{}',
+      });
+      if (window.__earthProfile) window.__earthProfile.unreadNotifications = 0;
+      await loadNotifications(); updateBadge();
+    };
+  }
+  const noticeClear = $('noticeClear');
+  if (noticeClear) {
+    noticeClear.onclick = async () => {
+      const response = await fetch('/api/notifications', {
+        method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        body: JSON.stringify({ action: 'clear' }),
+      });
+      const data = await response.json().catch(() => ({ ok: false }));
+      if (!data.ok) return toast(data.why || 'Could not clear those notices');
+      toast(data.cleared ? `Cleared ${data.cleared} read notice${data.cleared === 1 ? '' : 's'}.` : 'Nothing read to clear.');
+      await loadNotifications(); updateBadge();
+    };
+  }
+
   async function loadOwnerCenter(showModal = false) {
-    await Promise.all([loadApprovals(false), loadNotifications()]);
+    await Promise.all([loadApprovals(false), loadNotifications(), loadMail(false)]);
     if (showModal) {
       open('mApprovals');
       await fetch('/api/notifications', { method:'POST', headers:{ 'Content-Type':'application/json', Accept:'application/json' }, body:'{}' });

@@ -126,7 +126,12 @@ async function logout(req, res) {
   }
 }
 
-/** Notifications read on GET and mark-read on POST, so it takes both. */
+/**
+ * Notifications: read on GET, and on POST one of three tidying verbs. Dismiss
+ * and clear only ever hide - the Kernel keeps every notice it ever sent.
+ */
+const NOTIFICATION_ACTIONS = { read: 'read', dismiss: 'dismiss', clear: 'clear' };
+
 async function notifications(req, res) {
   try {
     const token = ownerToken(req);
@@ -135,14 +140,49 @@ async function notifications(req, res) {
       const result = await kernel('/v1/owner/notifications', { token });
       return send(res, result.status, result.data);
     }
-    if (req.method === 'POST') {
-      requireSameOrigin(req);
-      const result = await kernel('/v1/owner/notifications/read', { method: 'POST', token, body: {} });
-      return send(res, result.status, result.data);
+    if (req.method !== 'POST') return send(res, 405, { ok: false, why: 'method not allowed' });
+
+    requireSameOrigin(req);
+    // No action means mark-all-read, which is what this endpoint always did.
+    const action = NOTIFICATION_ACTIONS[String(req.body?.action || 'read')];
+    if (!action) return send(res, 400, { ok: false, why: 'action must be read, dismiss, or clear' });
+
+    const body = {};
+    if (action === 'dismiss') {
+      const notificationId = String(req.body?.notificationId || '').trim();
+      if (!notificationId) return send(res, 400, { ok: false, why: 'name the notification to dismiss' });
+      body.notificationId = notificationId;
     }
-    return send(res, 405, { ok: false, why: 'method not allowed' });
+    const result = await kernel(`/v1/owner/notifications/${action}`, { method: 'POST', token, body });
+    return send(res, result.status, result.data);
   } catch (error) {
     return send(res, 400, { ok: false, why: error.message || 'notification request failed' });
+  }
+}
+
+/** The agent's post: received and sent on GET, mark-read on POST. */
+async function letters(req, res) {
+  try {
+    const token = ownerToken(req);
+    if (!token) return send(res, 401, { ok: false, why: 'not owner-bound' });
+    if (req.method === 'GET') {
+      const result = await kernel('/v1/owner/letters', { token });
+      return send(res, result.status, result.data);
+    }
+    if (req.method !== 'POST') return send(res, 405, { ok: false, why: 'method not allowed' });
+
+    requireSameOrigin(req);
+    const body = {};
+    // An id marks one letter; no id marks the whole inbox.
+    if (req.body?.messageId !== undefined) {
+      const messageId = String(req.body.messageId || '').trim();
+      if (!messageId.startsWith('message:')) return send(res, 400, { ok: false, why: 'invalid letter id' });
+      body.messageId = messageId;
+    }
+    const result = await kernel('/v1/owner/letters/read', { method: 'POST', token, body });
+    return send(res, result.status, result.data);
+  } catch (error) {
+    return send(res, 400, { ok: false, why: error.message || 'letter request failed' });
   }
 }
 
@@ -209,6 +249,19 @@ async function manager(req, res) {
   }
 }
 
+/** The town as the Mayor needs to see it. Mayor-only, decided by the Kernel. */
+async function overview(req, res) {
+  try {
+    if (req.method !== 'GET') return send(res, 405, { ok: false, why: 'method not allowed' });
+    const token = ownerToken(req);
+    if (!token) return send(res, 401, { ok: false, why: 'connect your agent first' });
+    const result = await kernel('/v1/mayor/overview', { token });
+    return send(res, result.status, result.data);
+  } catch (error) {
+    return send(res, 403, { ok: false, why: error.message || 'overview refused' });
+  }
+}
+
 /** The always-on authorities' dials. Mayor-only, decided by the Kernel. */
 async function governanceAi(req, res) {
   try {
@@ -230,7 +283,7 @@ async function governanceAi(req, res) {
   }
 }
 
-const HANDLERS = { claim, logout, notifications, treasury, manager, 'governance-ai': governanceAi };
+const HANDLERS = { claim, logout, notifications, letters, treasury, manager, overview, 'governance-ai': governanceAi };
 
 module.exports = async function handler(req, res) {
   // The rewrite passes the original endpoint name; nothing else selects a route.

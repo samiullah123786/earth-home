@@ -20,6 +20,39 @@
   input { font-family:var(--mono); font-size:12px; border:2px solid var(--ink); padding:5px 8px; background:#fff; }
   .locked { border:3px dashed var(--ink); padding:28px; text-align:center; color:#5C5346; }
   code { background:rgba(0,0,0,.06); padding:1px 5px; }
+
+  /* The town at a glance. Numbers first, prose second - a Mayor opening this
+     page should know the state of the world before reading a sentence. */
+  .grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(132px, 1fr)); gap:10px; }
+  .stat { border:2px solid var(--ink); background:var(--paper); padding:9px 10px; }
+  .stat b { display:block; font-size:21px; line-height:1.15; }
+  .stat span { display:block; font-size:10px; letter-spacing:1px; text-transform:uppercase; color:#5C5346; margin-top:2px; }
+  .cols { display:grid; grid-template-columns:1fr 1fr; gap:18px; align-items:start; }
+  @media (max-width:820px) { .cols { grid-template-columns:1fr; } }
+
+  .office { border-left:6px solid #D8CDB8; padding:8px 0 8px 10px; border-bottom:2px solid #EFE6D5; }
+  .office:last-child { border-bottom:none; }
+  .office.on { border-left-color:#2F6B3A; }
+  .office .line { display:flex; gap:8px; align-items:baseline; }
+  .office .line b { font-size:13px; }
+  .office .line em { font-style:normal; font-size:10px; letter-spacing:1px; text-transform:uppercase; color:#5C5346; }
+  .office small { display:block; color:#5C5346; }
+  .quote { border-left:3px solid #C9BEA6; padding-left:8px; margin-top:4px; font-style:italic; color:#3F3931; }
+
+  .ticket { border:2px solid var(--ink); background:var(--paper); padding:9px 10px; margin-bottom:8px; }
+  .ticket .top { display:flex; gap:8px; align-items:baseline; }
+  .ticket .top b { flex:1; font-size:12.5px; }
+  .ticket .loud { background:#B4551F; color:#fff; padding:1px 6px; font-size:10px; }
+  .ticket .cat { border:1.5px solid var(--ink); padding:1px 5px; font-size:10px; text-transform:uppercase; }
+  .ticket small { display:block; color:#5C5346; margin-top:4px; }
+
+  .verdict { display:flex; gap:8px; align-items:baseline; padding:6px 0; border-bottom:2px solid #EFE6D5; }
+  .verdict:last-child { border-bottom:none; }
+  .verdict .mark { width:16px; font-weight:800; }
+  .verdict .mark.yes { color:#2F6B3A; }
+  .verdict .mark.no { color:#B4551F; }
+  .verdict span { flex:1; font-size:12px; }
+  .verdict em { font-style:normal; font-size:10px; color:#5C5346; letter-spacing:.6px; }
 </style>
 
 <main>
@@ -30,6 +63,30 @@
   </p>
 
   <div id="room" hidden>
+    <div class="card">
+      <h2>■ The town right now</h2>
+      <div class="grid" id="glance"><small>Counting the town…</small></div>
+    </div>
+
+    <div class="cols">
+      <div>
+        <div class="card">
+          <h2>■ Your offices</h2>
+          <div id="offices"><small>Asking each office what it last did…</small></div>
+        </div>
+      </div>
+      <div>
+        <div class="card">
+          <h2>■ What is broken</h2>
+          <div id="tickets"><small>Reading the care queue…</small></div>
+        </div>
+        <div class="card">
+          <h2>■ Recent decisions</h2>
+          <div id="decided"><small>Reading the record…</small></div>
+        </div>
+      </div>
+    </div>
+
     <div class="card">
       <h2>■ Always-on authorities</h2>
       <div id="governance"><div class="row"><span class="grow"><small>Reading the dials…</small></span></div></div>
@@ -71,6 +128,17 @@
   // nothing to show when the answer is no.
   const $ = (id) => document.getElementById(id);
   const safe = (value) => String(value).replace(/[&<>"]/g, (c) => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;' }[c]));
+
+  /** Elapsed time reads faster than a timestamp nobody converts in their head. */
+  function ago(at) {
+    if (!at) return 'never';
+    const minutes = Math.max(0, Math.round((Date.now() - Number(at)) / 60000));
+    if (minutes < 1) return 'just now';
+    if (minutes < 60) return `${minutes} min ago`;
+    const hours = Math.round(minutes / 60);
+    if (hours < 24) return `${hours}h ago`;
+    return `${Math.round(hours / 24)}d ago`;
+  }
 
   async function ask(path, options) {
     const response = await fetch(path, {
@@ -136,6 +204,52 @@
       $('manager').innerHTML = `<div class="row"><span class="grow"><b>${m.managerEnabled ? 'RUNNING' : 'PAUSED'}</b>
         <small>${m.evalsToday}/${m.dailyEvalBudget} appraisals today · ${m.pending} waiting · ${m.evaluated} done · ${m.flagged} held for you</small>
       </span></div>`;
+    }
+
+    // The town itself. Everything below is already in the Kernel; nothing had
+    // ever gathered it into one page a human could read in ten seconds.
+    const overview = await ask('/api/overview');
+    if (overview.data.ok) {
+      const o = overview.data;
+      const stat = (value, label) => `<div class="stat"><b>${value}</b><span>${label}</span></div>`;
+      $('glance').innerHTML = [
+        stat(o.people.citizens, 'citizens'),
+        stat(`${o.people.live}`, 'live now'),
+        stat(`${o.land.claimed}/${o.land.plots}`, 'plots claimed'),
+        stat(o.land.standing, 'buildings'),
+        stat(o.bank.assets, 'banked skills'),
+        stat(o.people.married, 'marriages'),
+        stat(`${o.world.width}×${o.world.height}`, `ring ${o.world.generation}`),
+        stat(o.tickets.length, 'open faults'),
+      ].join('');
+
+      $('offices').innerHTML = o.authorities.map((row) => `
+        <div class="office ${row.online ? 'on' : ''}">
+          <div class="line"><b>${safe(row.name)}</b><em>${safe(row.role)}</em></div>
+          <small>${safe(row.duty)} · tile ${row.at.x}, ${row.at.y}
+            · ${row.callsToday} call(s) today, ${row.tokensToday.toLocaleString()} tokens</small>
+          ${row.lastNote
+            ? `<div class="quote">${safe(row.lastChoice || 'observe')} — ${safe(row.lastNote)} <em>(${ago(row.lastAt)})</em></div>`
+            : '<small>Has not been asked to think yet.</small>'}
+        </div>`).join('') || '<small>No offices are seated.</small>';
+
+      $('tickets').innerHTML = o.tickets.length ? o.tickets.map((row) => `
+        <div class="ticket">
+          <div class="top">
+            <b>${safe(row.summary)}</b>
+            ${row.occurrences > 1 ? `<span class="loud">×${row.occurrences}</span>` : ''}
+            <span class="cat">${safe(row.category)}</span>
+          </div>
+          <small>tile ${row.at.x}, ${row.at.y} · reported by ${safe(row.reporter)}
+            ${row.act ? `· during '${safe(row.act)}'` : ''} · ${ago(row.createdAt)}</small>
+          ${row.triage ? `<div class="quote">${safe(row.triage)}</div>` : ''}
+        </div>`).join('') : '<small>Nothing is reported broken.</small>';
+
+      $('decided').innerHTML = o.decided.length ? o.decided.map((row) => `
+        <div class="verdict">
+          <span class="mark ${row.state === 'approved' ? 'yes' : 'no'}">${row.state === 'approved' ? '✓' : '✕'}</span>
+          <span>${safe(row.summary)}<br><em>${safe(row.kind)} · ${safe(row.risk)} · ${ago(row.decidedAt)}</em></span>
+        </div>`).join('') : '<small>Nothing has been decided yet.</small>';
     }
 
     const treasury = await ask('/api/treasury');
