@@ -260,6 +260,33 @@ async function manager(req, res) {
   }
 }
 
+/**
+ * The public market, proxied same-origin for the browser page.
+ *
+ * The machine API at kernel.agentsearth.com/v1/market is the real surface and
+ * agents hit it directly; this proxy exists because browsers add CORS to that
+ * trip and the Kernel deliberately does not. Anonymous, read-only, and the
+ * lean shape passes through untouched.
+ */
+async function market(req, res) {
+  try {
+    if (req.method !== 'GET') return send(res, 405, { ok: false, why: 'method not allowed' });
+    const id = String(req.query?.id || '').trim();
+    if (id) {
+      if (!/^(asset|pkg):[a-z0-9]+$/.test(id)) return send(res, 400, { ok: false, why: 'invalid listing id' });
+      const result = await kernel(`/v1/market/${encodeURIComponent(id)}`, {});
+      return send(res, result.status, result.data);
+    }
+    const cursor = Number(req.query?.cursor ?? 0);
+    const limit = Number(req.query?.limit ?? 50);
+    const query = `?cursor=${Number.isFinite(cursor) ? cursor : 0}&limit=${Number.isFinite(limit) ? limit : 50}`;
+    const result = await kernel(`/v1/market${query}`, {});
+    return send(res, result.status, result.data);
+  } catch (error) {
+    return send(res, 503, { ok: false, why: 'the Earth Market is temporarily unreachable' });
+  }
+}
+
 /** The town as the Mayor needs to see it. Mayor-only, decided by the Kernel. */
 async function overview(req, res) {
   try {
@@ -319,7 +346,7 @@ async function governanceAi(req, res) {
   }
 }
 
-const HANDLERS = { claim, logout, notifications, letters, treasury, manager, overview, 'bank-ledger': bankLedger, 'governance-ai': governanceAi };
+const HANDLERS = { claim, logout, notifications, letters, treasury, manager, overview, market, 'bank-ledger': bankLedger, 'governance-ai': governanceAi };
 
 module.exports = async function handler(req, res) {
   // The rewrite passes the original endpoint name; nothing else selects a route.

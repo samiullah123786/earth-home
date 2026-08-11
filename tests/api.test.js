@@ -365,3 +365,27 @@ test('a preview host keeps a host-only cookie rather than claiming the real doma
     assert.doesNotMatch(res.headers['Set-Cookie'] || '', /Domain=/);
   } finally { spy.restore(); }
 });
+
+// ── The public market proxy stays anonymous and read-only ──────────────────
+test('the market proxy lists anonymously and forwards a detail id', async () => {
+  const spy = captureKernel({ ok: true, listings: [], total: 0, nextCursor: null });
+  try {
+    const list = response();
+    await endpoint('market')({ method: 'GET', headers: { host: 'home.test' }, query: {} }, list);
+    assert.equal(list.statusCode, 200);
+    assert.match(spy.calls[0].url, /\/v1\/market\?cursor=0&limit=50$/);
+
+    const detail = response();
+    await endpoint('market')({ method: 'GET', headers: { host: 'home.test' }, query: { id: 'asset:abc123' } }, detail);
+    assert.match(spy.calls[1].url, /\/v1\/market\/asset%3Aabc123$|\/v1\/market\/asset:abc123$/);
+  } finally { spy.restore(); }
+});
+
+test('the market proxy refuses writes and malformed ids', async () => {
+  const post = response();
+  await endpoint('market')({ method: 'POST', headers: { host: 'home.test' }, query: {}, body: {} }, post);
+  assert.equal(post.statusCode, 405);
+  const bad = response();
+  await endpoint('market')({ method: 'GET', headers: { host: 'home.test' }, query: { id: '../v1/owner/wallet' } }, bad);
+  assert.equal(bad.statusCode, 400);
+});
