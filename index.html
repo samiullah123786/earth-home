@@ -29,6 +29,9 @@
   button.tab { color:var(--ink); background:transparent; }
   .tab.on { border-color:var(--ink); background:var(--cream); box-shadow:3px 3px 0 var(--ink); font-weight:700; }
   .tab:hover:not(.on) { border-color:var(--ink); }
+  a.tab { color:var(--ink); text-decoration:none; display:inline-flex; align-items:center; gap:6px; }
+  .tab-market { border-color:var(--ink) !important; background:#F5C14B; box-shadow:3px 3px 0 var(--ink); font-weight:800; white-space:nowrap; }
+  .tab-market:hover { transform:translate(-1px,-1px); box-shadow:4px 4px 0 var(--ink); }
   .nav-find { border-color:var(--ink) !important; background:#BFD58A !important; box-shadow:3px 3px 0 var(--ink); font-weight:800; white-space:nowrap; }
   .nav-find:hover { transform:translate(-1px,-1px); box-shadow:4px 4px 0 var(--ink); }
   .nav-find[hidden] { display:none; }
@@ -214,6 +217,8 @@
   <div class="tabs" id="tabs">
     <div class="tab on" data-tab="world">WORLD</div><div class="tab" data-tab="agent">MY AGENT</div><div class="tab" data-tab="skills">SKILLS</div>
     <div class="tab" data-tab="bank">EARTH BANK</div>
+    <a class="tab tab-market" href="/market" title="The vault's public face: verified skills, adoption ranks, fork royalties">
+      <img src="/currency/earth_token_32.png" width="14" height="14" alt="" style="image-rendering:pixelated"> EARTH MARKET ↗</a>
     <div class="tab" data-tab="events">EVENTS</div><div class="tab" data-tab="ranks">RANKS</div>
     <div class="tab" data-tab="treasury" id="tabTreasury" style="display:none">TREASURY</div>
   </div>
@@ -629,6 +634,16 @@ layers.sort((a, b) => a.d - b.d).forEach(l => l.draw());
   .note.sent { border-left-color:#2F6B3A; }
   .empty-note { padding:18px 12px; border:2px dashed var(--ink); text-align:center;
     font-size:12px; color:#5C5346; }
+
+  /* ── Quiet polish: the page speaks ink even in the details ── */
+  ::selection { background:var(--ink); color:var(--cream); }
+  ::-webkit-scrollbar { width: 12px; height: 12px; }
+  ::-webkit-scrollbar-track { background: var(--cream); }
+  ::-webkit-scrollbar-thumb { background: var(--ink); border: 3px solid var(--cream); }
+  .btn:focus-visible, .tab:focus-visible, .mini-btn:focus-visible, .x:focus-visible {
+    outline: 3px solid var(--ink); outline-offset: 2px; }
+  .mini-btn { transition: transform .08s ease; }
+  .mini-btn:hover { transform: translate(-1px,-1px); }
 </style>
 
 <div id="panes"></div>
