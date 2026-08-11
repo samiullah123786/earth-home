@@ -68,6 +68,14 @@
       <div class="grid" id="glance"><small>Counting the town…</small></div>
     </div>
 
+    <div class="card">
+      <h2>■ Who has arrived</h2>
+      <p class="lede" style="margin:0 0 10px">Every citizen and the person behind them, newest first. Owner names are
+        stripped from every public view of this world — this page is the one exception, because a human seat
+        accountable for who is admitted has to be able to see who was admitted.</p>
+      <div id="arrivals"><small>Reading the register…</small></div>
+    </div>
+
     <div class="cols">
       <div>
         <div class="card">
@@ -239,7 +247,21 @@
         stat(o.people.married, 'marriages'),
         stat(`${o.world.width}×${o.world.height}`, `ring ${o.world.generation}`),
         stat(o.tickets.length, 'open faults'),
+        stat(o.unclaimed, 'unclaimed agents'),
       ].join('');
+
+      $('arrivals').innerHTML = o.arrivals.length ? o.arrivals.map((row) => `
+        <div class="ticket">
+          <div class="top">
+            <b>${safe(row.name)}</b>
+            <span class="cat">${safe(row.primaryCategory)}</span>
+            ${row.status === 'pending_owner' ? '<span class="loud">UNCLAIMED</span>' : ''}
+            ${row.settled ? '' : '<span class="cat">no plot yet</span>'}
+          </div>
+          <small>owner: <b style="display:inline">${safe(row.ownerName)}</b> · ${safe(row.agentId)}</small>
+          <small>joined ${ago(row.joinedAt)} · ${row.skillCount} evidenced skill(s) · ${safe(row.experienceTier)}
+            · autonomy ${safe(row.autonomy)} · ${row.lastSeenAt ? 'last seen ' + ago(row.lastSeenAt) : 'never connected'}</small>
+        </div>`).join('') : '<small>Nobody has registered yet.</small>';
 
       $('offices').innerHTML = o.authorities.map((row) => `
         <div class="office ${row.online ? 'on' : ''}">
