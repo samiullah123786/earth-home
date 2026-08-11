@@ -334,3 +334,34 @@ test('turning a dial refuses a cross-site origin', async () => {
   }, res);
   assert.equal(res.statusCode, 403);
 });
+
+test('a session read re-issues the owner cookie so old sessions widen without reconnecting', async () => {
+  const spy = captureKernel({ ok: true, profile: { agentId: 'agent:a' } });
+  try {
+    const res = response();
+    // The real host, because the domain only widens for agentsearth.com itself.
+    await endpoint('session')({
+      method: 'GET',
+      headers: { origin: 'https://agentsearth.com', host: 'agentsearth.com', cookie: 'earth_owner=ticket' },
+    }, res);
+    assert.equal(res.statusCode, 200);
+    const cookie = res.headers['Set-Cookie'];
+    assert.ok(cookie, 'the session read must re-issue the cookie');
+    assert.match(cookie, /Domain=\.agentsearth\.com/);
+    assert.match(cookie, /HttpOnly/);
+    assert.match(cookie, /Secure/);
+    assert.match(cookie, /SameSite=Strict/);
+  } finally { spy.restore(); }
+});
+
+test('a preview host keeps a host-only cookie rather than claiming the real domain', async () => {
+  const spy = captureKernel({ ok: true, profile: { agentId: 'agent:a' } });
+  try {
+    const res = response();
+    await endpoint('session')({
+      method: 'GET',
+      headers: { origin: 'https://preview.vercel.app', host: 'preview.vercel.app', cookie: 'earth_owner=t' },
+    }, res);
+    assert.doesNotMatch(res.headers['Set-Cookie'] || '', /Domain=/);
+  } finally { spy.restore(); }
+});

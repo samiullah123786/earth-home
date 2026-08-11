@@ -100,8 +100,21 @@
   /* ── My agent ────────────────────────────────────── */
   .me { display:flex; flex-direction:column; }
   .agent-summary { display:grid; grid-template-columns:72px minmax(0,1fr); gap:14px; align-items:center; }
-  .agent-avatar { width:72px; height:80px; display:grid; place-items:center; background:var(--cream); border:3px solid var(--ink); box-shadow:4px 4px 0 var(--ink); }
-  .agent-avatar svg { display:block; width:58px; height:66px; image-rendering:pixelated; }
+  /* The citizen the world actually draws.
+     The card used to invent its own two-colour figure, which looked like a
+     different person from the one walking around on the map. This crops the
+     real LPC sheet - 9 columns by 28 rows of 64px frames, state-major with the
+     four directions in back/left/front/right order - to the front-facing idle
+     frame, scaled up with crisp pixels. */
+  .agent-avatar { width:96px; height:96px; flex:0 0 auto; background:var(--cream);
+    border:3px solid var(--ink); box-shadow:4px 4px 0 var(--ink); position:relative; overflow:hidden; }
+  .agent-avatar .lpc { position:absolute; inset:0; image-rendering:pixelated;
+    background-repeat:no-repeat;
+    /* 576x1792 at 1.5x = 864x2688; front idle is row 2, column 0. */
+    background-size:864px 2688px; background-position:-16px -192px; }
+  .agent-avatar svg { display:block; width:74px; height:84px; image-rendering:pixelated; margin:6px auto; }
+  .agent-avatar .fallback-note { position:absolute; left:0; right:0; bottom:0; text-align:center;
+    font:700 7.5px/1.6 var(--mono); letter-spacing:.4px; background:var(--ink); color:var(--cream); }
   .agent-title { font-size:18px; font-weight:850; line-height:1.1; }
   .agent-id { margin-top:5px; overflow:hidden; text-overflow:ellipsis; font:10px/1.35 var(--mono); opacity:.62; white-space:nowrap; }
   .agent-specialty { margin-top:7px; font-size:11px; line-height:1.35; }
@@ -1159,7 +1172,34 @@ layers.sort((a, b) => a.d - b.d).forEach(l => l.draw());
 
   const AGENT_COLORS = { engineering:'#3B82F6', design:'#8B5CF6', marketing:'#F97316', content:'#F59E0B',
     data:'#14B8A6', security:'#EF4444', research:'#22C55E', media:'#EC4899', ops:'#64748B', general:'#84A98C' };
+  /**
+   * The citizen's real LPC sprite, cropped from the sheet the world renders.
+   *
+   * Falls back to the drawn figure when an agent has no avatar spec yet, or
+   * when the sheet cannot be fetched - a card that renders nothing is worse
+   * than a card that renders something honest about being a placeholder.
+   */
   function agentAvatar(profile) {
+    const key = profile.avatarSpec?.catalogKey;
+    if (key && /^[a-z0-9_]+$/.test(key)) {
+      const wrap = make('div', 'agent-avatar');
+      const sprite = make('div', 'lpc');
+      const url = `${WORLD_ORIGIN}/assets/lpc_framework/generated/avatars/${key}.png`;
+      sprite.style.backgroundImage = `url("${url}")`;
+      wrap.title = `${profile.agentName} · ${key}`;
+      wrap.setAttribute('role', 'img');
+      wrap.setAttribute('aria-label', `${profile.agentName}, drawn from verified evidence`);
+      wrap.append(sprite);
+      // Confirm the sheet actually exists; swap to the drawn figure if not.
+      const probe = new Image();
+      probe.onerror = () => { wrap.replaceWith(drawnAvatar(profile, true)); };
+      probe.src = url;
+      return wrap;
+    }
+    return drawnAvatar(profile, false);
+  }
+
+  function drawnAvatar(profile, spriteMissing) {
     const wrap = make('div', 'agent-avatar');
     const primary = AGENT_COLORS[profile.family] || AGENT_COLORS.general;
     const accent = AGENT_COLORS[profile.accent] || AGENT_COLORS[profile.specialties?.find(s => AGENT_COLORS[s])] || '#805235';
@@ -1172,6 +1212,7 @@ layers.sort((a, b) => a.d - b.d).forEach(l => l.draw());
       <rect x="4" y="15" width="3" height="3" fill="${accent}"/><rect x="10" y="15" width="3" height="3" fill="${accent}"/><rect x="8" y="0" width="1" height="2" fill="${accent}"/>
     </svg>`;
     wrap.querySelector('svg').setAttribute('aria-label', `${profile.agentName} pixel avatar`);
+    if (spriteMissing) wrap.append(make('span', 'fallback-note', 'SPRITE PENDING'));
     return wrap;
   }
 

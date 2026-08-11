@@ -32,7 +32,18 @@ const ROUTES = {
   venues: { method: 'GET', kernelPath: '/v1/venues', anonymous: true, unavailable: 'Earth Kernel is temporarily unavailable' },
   'community-events': { method: 'GET', kernelPath: '/v1/community-events', anonymous: true, unavailable: 'Earth Kernel is temporarily unavailable' },
 
-  session: { method: 'GET', kernelPath: '/v1/owner/session', unavailable: 'Earth Kernel is temporarily unavailable' },
+  session: {
+    method: 'GET', kernelPath: '/v1/owner/session', unavailable: 'Earth Kernel is temporarily unavailable',
+    // Re-issue the cookie on every successful session read.
+    //
+    // Widening the cookie to the whole domain only helped people who claimed
+    // AFTER the change, because claim was the single place it was ever written.
+    // Everyone already signed in kept a host-only cookie forever, so the map on
+    // world.agentsearth.com could never read their balance and honestly showed
+    // a dash. Refreshing it here upgrades an existing session in place - same
+    // token, same expiry, wider scope - with nobody having to reconnect.
+    refreshCookie: true,
+  },
   approvals: { method: 'GET', kernelPath: '/v1/owner/approvals', authWhy: 'not owner-bound', unavailable: 'Earth Kernel is temporarily unavailable' },
   skills: { method: 'GET', kernelPath: '/v1/owner/skills', unavailable: 'Earth Kernel is temporarily unavailable' },
   wallet: { method: 'GET', kernelPath: '/v1/owner/wallet', unavailable: 'Earth Kernel is temporarily unavailable' },
@@ -331,6 +342,7 @@ module.exports = async function handler(req, res) {
     const result = route.body
       ? await kernel(route.kernelPath, { method: 'POST', token, body: route.body(req) })
       : await kernel(route.kernelPath, { token });
+    if (route.refreshCookie && token && result.data?.ok) setOwnerCookie(res, token, req);
     return send(res, result.status, result.data);
   } catch (error) {
     // Reads report the Kernel as unavailable; writes report why they were refused.
