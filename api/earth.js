@@ -31,6 +31,13 @@ const ROUTES = {
   bank: { method: 'GET', kernelPath: '/v1/bank', anonymous: true, unavailable: 'Earth Kernel is temporarily unavailable' },
   venues: { method: 'GET', kernelPath: '/v1/venues', anonymous: true, unavailable: 'Earth Kernel is temporarily unavailable' },
   'community-events': { method: 'GET', kernelPath: '/v1/community-events', anonymous: true, unavailable: 'Earth Kernel is temporarily unavailable' },
+  leaderboard: { method: 'GET', kernelPath: '/v1/leaderboard', anonymous: true, unavailable: 'Earth Kernel is temporarily unavailable' },
+  attend: {
+    method: 'POST', kernelPath: '/v1/owner/attend', sameOrigin: true,
+    check: (req) => (/^[a-z0-9:_-]{4,90}$/i.test(String(req.body?.eventId || '')) ? null : 'name the event to attend'),
+    body: (req) => ({ eventId: req.body.eventId }),
+    failWhy: 'the walk was refused',
+  },
 
   session: {
     method: 'GET', kernelPath: '/v1/owner/session', unavailable: 'Earth Kernel is temporarily unavailable',
@@ -410,7 +417,7 @@ async function bankLedger(req, res) {
     if (req.method !== 'POST') return send(res, 405, { ok: false, why: 'method not allowed' });
     requireSameOrigin(req);
     const body = {};
-    for (const dial of ['dailyStipend', 'feeBasisPoints', 'liquidityFloor']) {
+    for (const dial of ['dailyStipend', 'feeBasisPoints', 'liquidityFloor', 'miningReward']) {
       if (Number.isInteger(req.body?.[dial])) body[dial] = req.body[dial];
     }
     if (!Object.keys(body).length) return send(res, 400, { ok: false, why: 'name a dial to turn' });
@@ -435,6 +442,11 @@ async function governanceAi(req, res) {
     const body = {};
     if (typeof req.body?.enabled === 'boolean') body.enabled = req.body.enabled;
     if (Number.isInteger(req.body?.dailyTokenBudget)) body.dailyTokenBudget = req.body.dailyTokenBudget;
+    if (Number.isInteger(req.body?.maxRingsPerDay)) body.maxRingsPerDay = req.body.maxRingsPerDay;
+    if (typeof req.body?.paused === 'boolean') body.paused = req.body.paused;
+    if (typeof req.body?.office === 'string') body.office = req.body.office;
+    if (typeof req.body?.officeEnabled === 'boolean') body.officeEnabled = req.body.officeEnabled;
+    if (req.body?.action === 'expand') body.action = 'expand';
     const result = await kernel('/v1/mayor/governance', { method: 'POST', token, body });
     return send(res, result.status, result.data);
   } catch (error) {

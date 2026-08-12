@@ -106,6 +106,24 @@
     </div>
 
     <div class="card">
+      <h2>■ Control center</h2>
+      <p class="lede" style="margin:0 0 10px">Each office stands down on its own switch; the town pause is the
+        emergency brake — ambient life freezes and new acts are refused with an honest message, while desks,
+        letters and every read stay alive.</p>
+      <div id="officeToggles"><div class="row"><span class="grow"><small>Reading the offices…</small></span></div></div>
+      <div class="row" style="margin-top:10px">
+        <button type="button" id="pauseToggle">…</button>
+        <span class="grow"><small id="pauseNote"></small></span>
+      </div>
+      <div class="row" style="margin-top:10px">
+        <button type="button" id="expandNow">Grow the world by one ring</button>
+        <input id="dialRings" type="number" min="0" max="8" step="1" aria-label="Growth allowance per day">
+        <button type="button" id="dialRingsSet">Set growth allowance</button>
+      </div>
+      <div id="controlNote" aria-live="polite"></div>
+    </div>
+
+    <div class="card">
       <h2>■ Waiting on you</h2>
       <div id="inbox"><div class="row"><span class="grow"><small>Opening the inbox…</small></span></div></div>
     </div>
@@ -126,6 +144,8 @@
         <button type="button" id="dialStipendSet">Set daily stipend</button>
         <input id="dialFee" type="number" min="0" max="2000" step="50" aria-label="Bank fee in basis points">
         <button type="button" id="dialFeeSet">Set fee (basis points)</button>
+        <input id="dialMining" type="number" min="0" step="25" aria-label="Mining reward for a novel deposit">
+        <button type="button" id="dialMiningSet">Set mining reward</button>
       </div>
       <h2 style="margin:16px 0 8px">Owed to authors</h2>
       <div id="bankClaims"><small>Checking what the Bank owes…</small></div>
@@ -204,6 +224,50 @@
       const value = Number(budget.value);
       if (!Number.isInteger(value) || value < 0) return;
       await ask('/api/governance-ai', { method: 'POST', body: JSON.stringify({ dailyTokenBudget: value }) });
+      load();
+    };
+
+    // The control center: one switch per office, the emergency brake, and
+    // deliberate growth within the same daily allowance the surveyors obey.
+    const stoodDown = new Set(g.disabledOffices || []);
+    $('officeToggles').innerHTML = (g.offices || []).map((office) => `
+      <div class="row"><span class="grow"><b>${safe(office.role)}</b><small>${safe(office.duty)}</small></span>
+        <button type="button" data-office="${safe(office.role)}" ${stoodDown.has(office.role) ? 'class="go"' : ''}>
+          ${stoodDown.has(office.role) ? 'Restore office' : 'Stand down'}</button>
+      </div>`).join('');
+    $('officeToggles').querySelectorAll('[data-office]').forEach((button) => {
+      button.onclick = async () => {
+        const role = button.dataset.office;
+        await ask('/api/governance-ai', { method: 'POST',
+          body: JSON.stringify({ office: role, officeEnabled: stoodDown.has(role) }) });
+        load();
+      };
+    });
+    const pause = $('pauseToggle');
+    pause.textContent = g.townPaused ? 'Resume the town' : 'Pause the town';
+    pause.className = g.townPaused ? 'go' : '';
+    $('pauseNote').textContent = g.townPaused
+      ? 'The town is frozen mid-step. Desks, letters and every read still answer.'
+      : 'Running. The pause freezes ambient life and refuses new acts with an honest message.';
+    pause.onclick = async () => {
+      await ask('/api/governance-ai', { method: 'POST', body: JSON.stringify({ paused: !g.townPaused }) });
+      load();
+    };
+    const rings = $('dialRings');
+    if (!rings.value) rings.value = g.maxRingsPerDay;
+    $('dialRingsSet').onclick = async () => {
+      const value = Number(rings.value);
+      if (!Number.isInteger(value) || value < 0 || value > 8) return;
+      await ask('/api/governance-ai', { method: 'POST', body: JSON.stringify({ maxRingsPerDay: value }) });
+      load();
+    };
+    $('expandNow').onclick = async () => {
+      $('expandNow').disabled = true;
+      const result = await ask('/api/governance-ai', { method: 'POST', body: JSON.stringify({ action: 'expand' }) });
+      $('expandNow').disabled = false;
+      $('controlNote').innerHTML = result.data.ok
+        ? `<div class="row"><span class="grow"><small>The world grew to ${Number(result.data.width)} × ${Number(result.data.height)}, ring ${Number(result.data.generation)}. ${Number(result.data.ringsToday)}/${g.maxRingsPerDay} ring(s) used today.</small></span></div>`
+        : `<div class="row"><span class="grow"><small>${safe(result.data.why || 'The expansion was refused.')}</small></span></div>`;
       load();
     };
 
@@ -320,6 +384,12 @@
       $('dialFeeSet').onclick = () => {
         const value = Number(fee.value);
         if (Number.isInteger(value) && value >= 0) turn({ feeBasisPoints: value });
+      };
+      const mining = $('dialMining');
+      if (!mining.value) mining.value = k.dials.miningReward;
+      $('dialMiningSet').onclick = () => {
+        const value = Number(mining.value);
+        if (Number.isInteger(value) && value >= 0) turn({ miningReward: value });
       };
 
       $('bankClaims').innerHTML = k.claims.length ? k.claims.map((row) => `
