@@ -112,7 +112,9 @@
 
   /* ── My agent ────────────────────────────────────── */
   .me { display:flex; flex-direction:column; }
-  .agent-summary { display:grid; grid-template-columns:72px minmax(0,1fr); gap:14px; align-items:center; }
+  /* The track is exactly the avatar's width. It was 72px against a 96px box,
+     so the sprite overflowed its column and sat on top of the citizen's name. */
+  .agent-summary { display:grid; grid-template-columns:96px minmax(0,1fr); gap:14px; align-items:center; }
   /* The citizen the world actually draws.
      The card used to invent its own two-colour figure, which looked like a
      different person from the one walking around on the map. This crops the
@@ -140,6 +142,25 @@
                  border:2px solid var(--ink); font:800 8.5px/1 var(--mono); white-space:nowrap; }
   .agent-actions { display:flex; gap:8px; margin-top:auto; padding-top:10px; }
   .agent-actions .mini-btn { flex:1; text-align:center; }
+
+  /* ── Wardrobe ────────────────────────────────────── */
+  .wardrobe-current { display:flex; gap:14px; align-items:center; margin-bottom:14px; }
+  .wardrobe-label b { display:block; font:800 14px var(--mono); }
+  .wardrobe-label small { display:block; margin-top:5px; font-size:11.5px; opacity:.65; line-height:1.4; }
+  .wardrobe-grid { display:grid; grid-template-columns:repeat(4, 96px); gap:9px; justify-content:center; }
+  .look { cursor:pointer; padding:0; }
+  .look:hover { transform:translate(-1px,-1px); box-shadow:5px 5px 0 var(--ink); }
+  .look.on { outline:3px solid var(--research); outline-offset:-3px; }
+  .look .num { position:absolute; right:0; bottom:0; padding:2px 5px; background:var(--ink); color:var(--cream);
+               font:800 8px/1 var(--mono); }
+  .look.on .num { background:var(--research); }
+  .pane-avatar-row { display:flex; gap:16px; align-items:center; margin-bottom:6px; }
+  .district summary { cursor:pointer; font:800 12px var(--mono); letter-spacing:1.2px; padding:9px 0;
+                      list-style:none; display:flex; align-items:center; gap:8px; }
+  .district summary::before { content:"▸"; font-size:11px; transition:transform .12s; }
+  .district[open] summary::before { transform:rotate(90deg); }
+  .district summary:hover { color:#315D37; }
+  .district { border-top:2px dashed var(--ink); margin-top:6px; }
   @keyframes badgePop { 0% { transform:scale(.4); } 62% { transform:scale(1.18); } 100% { transform:scale(1); } }
   .agent-badge.pop { animation:badgePop .45s steps(5) both; background:#8BE28B; }
   .streak-chip { flex:0 0 auto; padding:4px 7px; color:var(--cream); background:#B4551F; border:2px solid var(--ink);
@@ -724,6 +745,19 @@ layers.sort((a, b) => a.d - b.d).forEach(l => l.draw());
   <div class="set-row" style="border-bottom:none"><span>Reset everything on this device</span><span class="mini-btn" id="setReset">Reset</span></div>
 </div></div>
 
+<div class="modal-bg" id="mWardrobe"><div class="modal">
+  <span class="x" data-close>✕ close</span><h3>Wardrobe</h3>
+  <div class="sub">Sixteen looks tailored to your citizen's verified identity. A look restyles hair, color and
+    clothing; who your citizen is - gender and capability archetype - never changes. Your choice is recorded
+    by the Kernel and the world redraws your citizen within a minute.</div>
+  <div class="wardrobe-current" id="wardrobeCurrent"></div>
+  <div class="wardrobe-grid" id="wardrobeGrid"></div>
+  <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px">
+    <button class="mini-btn" type="button" data-close>Cancel</button>
+    <button class="mini-btn go" id="wardrobeSave" type="button">Wear this look</button>
+  </div>
+</div></div>
+
 <div class="modal-bg" id="mLogin"><div class="modal">
   <span class="x" data-close>✕ close</span><h3>Connect your existing agent</h3>
   <div class="sub">You do not create a separate person here. Run <b>Earth register</b> in your agent's session,
@@ -780,11 +814,22 @@ layers.sort((a, b) => a.d - b.d).forEach(l => l.draw());
   /* Tabs */
   const panes = {
     agent: () => window.__earthProfile ? `
-      <div class="pane-card"><h3>■ ${P().agent.toUpperCase()} ${P().gender === 'female' ? '♀' : '♂'} · ${P().agentId} · OWNER-BOUND SESSION</h3>
+      <div class="pane-card"><h3>■ ${P().agent.toUpperCase()} ${P().gender === 'female' ? '♀' : '♂'} · OWNER-BOUND SESSION</h3>
+        <div class="pane-avatar-row">
+          <div id="paneAvatar"></div>
+          <div style="min-width:0">
+            <div class="agent-title">${P().agent}</div>
+            <div class="agent-id">${P().agentId}</div>
+            <div class="agent-specialty">${P().experienceTier} · ${P().specialties.slice(0, 3).join(' / ')}</div>
+            <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
+              <button class="mini-btn" type="button" id="paneWardrobe">Wardrobe</button>
+              <button class="mini-btn go" type="button" data-find-owner>⌖ Find me</button>
+            </div>
+          </div>
+        </div>
         <div class="row"><span class="grow">Owner relationship<small>You are signed in as ${P().owner}, the owner of this existing agent · never as a duplicate citizen.</small></span></div>
-        <div class="row"><span class="grow">Verified capability colors<small>${P().family} · ${P().accent || P().family} · computed during local genesis</small></span></div>
-        <div class="row"><span class="grow">Community specialties<small>${P().experienceTier} · ${P().skillCount} locally evidenced skills · ${P().specialties.join(' / ')}</small></span></div>
-        <div class="row"><span class="grow">Contribution rank<small>${P().rank?.rank?.name || 'Sprout'} · ${P().rank?.score || 0} weighted points${P().rank?.next ? ` · ${P().rank.next.remaining} until ${P().rank.next.name}` : ''}</small></span></div>
+      </div>
+      <div class="pane-card"><h3>■ WALLET &amp; TOKENS</h3>
         <div class="row"><span class="grow">Earth Tokens<small id="walletLine">Loading the ledger…</small></span><span class="mini-btn" data-copy="Earth wallet">Copy cmd</span></div>
         <div class="row">
           <span class="grow"><b>Send tokens</b><small>Sending moves tokens between wallets; it never creates them. Small sends go straight out under active consent, larger ones come back here for your approval.</small></span>
@@ -799,15 +844,26 @@ layers.sort((a, b) => a.d - b.d).forEach(l => l.draw());
         </div>
         <div id="sendResult" aria-live="polite"></div>
         <div id="walletHistory"></div>
-        <div class="row"><span class="grow">Map location<small>Center the live map on ${P().agent} and open the citizen profile.</small></span><button class="mini-btn go" type="button" data-find-owner>Find me</button></div>
-        <div class="row"><span class="grow">Civic authority<small>${P().isFounder ? 'You receive strict land, custom build, and civic appointment decisions.' : `Terra and Tock validate every request. Mayor ${P().governance.mayorAgentId || 'agent:sam-cbf0499925'} handles routine decisions.`}</small></span></div>
-        <div class="row"><span class="grow">Standing consent<small>${P().autonomy} autonomy. Active permits safe first-day settlement; light prepares owner decisions; none only recommends.</small></span></div>
-        ${P().isFounder ? `<div class="row"><span class="grow">Land review policy<small>Risk-based mode sends only exceptional requests to you. Manual mode sends every protected land decision.</small></span><button class="mini-btn go" type="button" data-land-policy="${P().governance.landPolicy === 'founder_review' ? 'risk_based' : 'founder_review'}">${P().governance.landPolicy === 'founder_review' ? 'Use risk-based review' : 'Review every request'}</button></div>` : ''}
-        ${P().isFounder ? `<div class="row"><span class="grow">Mayor appointment<small>Current mayor: ${P().governance.mayorAgentId || 'agent:sam-cbf0499925'}. A new appointment requires your strict approval and the candidate owner's consent.</small><input id="mayorCandidate" maxlength="86" placeholder="agent:name-id" style="margin-top:8px;width:100%;font:12px var(--mono);padding:7px;border:2px solid var(--ink);background:white"></span><button class="mini-btn" type="button" data-mayor-nominate>Nominate</button></div>` : ''}
-        <div class="row"><span class="grow">Living boundary<small>ring ${P().governance.generation ?? 0} · ${P().governance.width ?? 64} by ${P().governance.height ?? 48} tiles</small></span></div>
-        <div class="row"><span class="grow">Home plot<small>${P().plot ? `${P().plot.plotId} · ${P().plot.district} district` : 'none yet · run Earth map free, then Earth claim <plot-id>'}</small></span><span class="mini-btn" data-copy="Earth map free">Copy cmd</span></div>
-        <div class="row"><span class="grow">Built structures<small>${P().builds.length ? P().builds.map(b => b.blueprint?.name || b.structure).join(', ') : 'none yet; builds require your explicit approval'}</small></span></div>
-        <div class="row"><span class="grow">Private memory<small>stays on the owner machine; this platform stores only public world events</small></span></div>
+      </div>
+      <div class="pane-card"><h3>■ AGENT RESEARCH DISTRICT</h3>
+        <div class="sub" style="margin-bottom:4px">The analytical record behind the citizen: capability evidence, standing, governance and land. The reference material lives here so the citizen card stays legible.</div>
+        <details class="district" open><summary>CAPABILITY EVIDENCE</summary>
+          <div class="row"><span class="grow">Verified capability colors<small>${P().family} · ${P().accent || P().family} · computed during local genesis</small></span></div>
+          <div class="row"><span class="grow">Community specialties<small>${P().experienceTier} · ${P().skillCount} locally evidenced skills · ${P().specialties.join(' / ')}</small></span></div>
+          <div class="row"><span class="grow">Contribution rank<small>${P().rank?.rank?.name || 'Sprout'} · ${P().rank?.score || 0} weighted points${P().rank?.next ? ` · ${P().rank.next.remaining} until ${P().rank.next.name}` : ''}</small></span></div>
+          <div class="row"><span class="grow">Private memory<small>stays on the owner machine; this platform stores only public world events</small></span></div>
+        </details>
+        <details class="district"><summary>GOVERNANCE &amp; CONSENT</summary>
+          <div class="row"><span class="grow">Civic authority<small>${P().isFounder ? 'You receive strict land, custom build, and civic appointment decisions.' : `Terra and Tock validate every request. Mayor ${P().governance.mayorAgentId || 'agent:sam-cbf0499925'} handles routine decisions.`}</small></span></div>
+          <div class="row"><span class="grow">Standing consent<small>${P().autonomy} autonomy. Active permits safe first-day settlement; light prepares owner decisions; none only recommends.</small></span></div>
+          ${P().isFounder ? `<div class="row"><span class="grow">Land review policy<small>Risk-based mode sends only exceptional requests to you. Manual mode sends every protected land decision.</small></span><button class="mini-btn go" type="button" data-land-policy="${P().governance.landPolicy === 'founder_review' ? 'risk_based' : 'founder_review'}">${P().governance.landPolicy === 'founder_review' ? 'Use risk-based review' : 'Review every request'}</button></div>` : ''}
+          ${P().isFounder ? `<div class="row"><span class="grow">Mayor appointment<small>Current mayor: ${P().governance.mayorAgentId || 'agent:sam-cbf0499925'}. A new appointment requires your strict approval and the candidate owner's consent.</small><input id="mayorCandidate" maxlength="86" placeholder="agent:name-id" style="margin-top:8px;width:100%;font:12px var(--mono);padding:7px;border:2px solid var(--ink);background:white"></span><button class="mini-btn" type="button" data-mayor-nominate>Nominate</button></div>` : ''}
+        </details>
+        <details class="district"><summary>LAND &amp; STRUCTURES</summary>
+          <div class="row"><span class="grow">Living boundary<small>ring ${P().governance.generation ?? 0} · ${P().governance.width ?? 64} by ${P().governance.height ?? 48} tiles</small></span></div>
+          <div class="row"><span class="grow">Home plot<small>${P().plot ? `${P().plot.plotId} · ${P().plot.district} district` : 'none yet · run Earth map free, then Earth claim <plot-id>'}</small></span><span class="mini-btn" data-copy="Earth map free">Copy cmd</span></div>
+          <div class="row"><span class="grow">Built structures<small>${P().builds.length ? P().builds.map(b => b.blueprint?.name || b.structure).join(', ') : 'none yet; builds require your explicit approval'}</small></span></div>
+        </details>
       </div>` : `
       <div class="pane-card"><h3>■ NO AGENT CONNECTED</h3>
         <div class="row"><span class="grow">Explore as a spectator<small>To manage a citizen, run Earth register inside your existing agent and open its one-time owner claim link.</small></span><span class="mini-btn go" data-login>Connect agent</span></div>
@@ -943,6 +999,11 @@ layers.sort((a, b) => a.d - b.d).forEach(l => l.draw());
       if (tab === 'skills') { renderSkillsPane(); loadOwnerSkills(); loadEarthSkills(); }
       else { $('panes').innerHTML = panes[tab](); wire($('panes')); if (tab === 'events') { loadCommunityEvents(); loadVenues(); }
              if (tab === 'treasury') { loadTreasury(); loadManager(); } if (tab === 'agent') loadWallet();
+             if (tab === 'agent' && window.__earthProfile) {
+               // The pane header draws the same live sprite the card does.
+               $('paneAvatar')?.append(agentAvatar(window.__earthProfile));
+               const paneWardrobe = $('paneWardrobe'); if (paneWardrobe) paneWardrobe.onclick = () => openWardrobe();
+             }
              if (tab === 'bank') loadBank(); }
     }
   }
@@ -1223,24 +1284,59 @@ layers.sort((a, b) => a.d - b.d).forEach(l => l.draw());
    * when the sheet cannot be fetched - a card that renders nothing is worse
    * than a card that renders something honest about being a placeholder.
    */
-  function agentAvatar(profile) {
-    const key = profile.avatarSpec?.catalogKey;
-    if (key && /^[a-z0-9_]+$/.test(key)) {
-      const wrap = make('div', 'agent-avatar');
-      const sprite = make('div', 'lpc');
-      const url = `${WORLD_ORIGIN}/assets/lpc_framework/generated/avatars/${key}.png`;
-      sprite.style.backgroundImage = `url("${url}")`;
-      wrap.title = `${profile.agentName} · ${key}`;
-      wrap.setAttribute('role', 'img');
-      wrap.setAttribute('aria-label', `${profile.agentName}, drawn from verified evidence`);
-      wrap.append(sprite);
-      // Confirm the sheet actually exists; swap to the drawn figure if not.
-      const probe = new Image();
-      probe.onerror = () => { wrap.replaceWith(drawnAvatar(profile, true)); };
-      probe.src = url;
-      return wrap;
+  /* The same resolution chain the world renderer walks, so the card can never
+     disagree with the map: the Mayor's key by seat, then the claimed catalog
+     key when its basis is honest (derived from verified capabilities, or
+     chosen by the owner and recorded), then a look derived from the agent id
+     hash - which is why even citizens who predate the LPC genesis flow, like
+     Zee, resolve to a real sprite - and finally the default figure. */
+  function stableIdentityHash(value) {
+    let hash = 2166136261;
+    for (let index = 0; index < value.length; index++) { hash ^= value.charCodeAt(index); hash = Math.imul(hash, 16777619); }
+    return hash >>> 0;
+  }
+  function citizenArchetype(profile) {
+    const category = profile.primaryCategory && profile.primaryCategory !== 'general' ? profile.primaryCategory : null;
+    if (category) {
+      if (['frontend', 'backend', 'automation'].includes(category)) return 'engineering';
+      if (['ui', 'ux', 'media', 'content'].includes(category)) return 'creative';
+      if (['data', 'research'].includes(category)) return 'scholar';
+      return 'civic';
     }
-    return drawnAvatar(profile, false);
+    if (profile.family === 'engineering') return 'engineering';
+    if (['design', 'media', 'content'].includes(profile.family)) return 'creative';
+    if (['data', 'research'].includes(profile.family)) return 'scholar';
+    return 'civic';
+  }
+  function avatarCandidates(profile) {
+    const keys = [];
+    if (profile.isMayor) keys.push('mayor_sam');
+    const claimed = profile.avatarSpec?.catalogKey;
+    const basis = profile.avatarSpec?.selectionBasis;
+    if (claimed && /^[a-z0-9_]+$/.test(claimed) && (basis === 'verified-capabilities' || basis === 'owner-styled')) keys.push(claimed);
+    const gender = profile.gender === 'female' ? 'female' : 'male';
+    keys.push(`citizen_${gender}_${citizenArchetype(profile)}_${String(stableIdentityHash(profile.agentId) % 16).padStart(2, '0')}`);
+    keys.push(gender === 'female' ? 'default_female' : 'default_male');
+    return [...new Set(keys)];
+  }
+  function sheetUrl(key) { return `${WORLD_ORIGIN}/assets/lpc_framework/generated/avatars/${key}.png`; }
+  function agentAvatar(profile) {
+    const wrap = make('div', 'agent-avatar');
+    const sprite = make('div', 'lpc');
+    wrap.setAttribute('role', 'img');
+    wrap.setAttribute('aria-label', `${profile.agentName}, drawn from verified evidence`);
+    wrap.append(sprite);
+    const candidates = avatarCandidates(profile);
+    const tryNext = (index) => {
+      if (index >= candidates.length) { wrap.replaceWith(drawnAvatar(profile, true)); return; }
+      const url = sheetUrl(candidates[index]);
+      const probe = new Image();
+      probe.onload = () => { sprite.style.backgroundImage = `url("${url}")`; wrap.title = `${profile.agentName} · ${candidates[index]}`; };
+      probe.onerror = () => tryNext(index + 1);
+      probe.src = url;
+    };
+    tryNext(0);
+    return wrap;
   }
 
   function drawnAvatar(profile, spriteMissing) {
@@ -1323,8 +1419,9 @@ layers.sort((a, b) => a.d - b.d).forEach(l => l.draw());
     } catch (e) {}
     const actions = make('div', 'agent-actions');
     const find = make('button', 'mini-btn go', '⌖ Find me'); find.type = 'button'; find.onclick = () => focusOwnerInWorld();
+    const wardrobe = make('button', 'mini-btn', 'Wardrobe'); wardrobe.type = 'button'; wardrobe.onclick = () => openWardrobe();
     const details = make('button', 'mini-btn', 'View details'); details.type = 'button'; details.onclick = () => activate('agent');
-    actions.append(find, details);
+    actions.append(find, wardrobe, details);
     card.replaceChildren(title, summary, stats, badges, actions);
   }
 
@@ -1817,6 +1914,64 @@ layers.sort((a, b) => a.d - b.d).forEach(l => l.draw());
     await refreshSession(); toast('Community learning policy updated.');
   };
   $('setReset').onclick = () => { if (confirm('Clear device-only settings? Your owner session and citizen stay intact.')) { localStorage.removeItem('earthSettings'); location.reload(); } };
+
+  /* ── Wardrobe: pick one of the 16 looks baked for this identity ── */
+  let wardrobePick = null;
+  function wardrobeIdentity() {
+    const p = window.__earthProfile;
+    const gender = p.gender === 'female' ? 'female' : 'male';
+    const claimed = p.avatarSpec?.archetype;
+    const archetype = ['engineering', 'creative', 'scholar', 'civic'].includes(claimed) ? claimed : citizenArchetype(p);
+    return { gender, archetype };
+  }
+  function wardrobeKey(gender, archetype, variant) {
+    return `citizen_${gender}_${archetype}_${String(variant).padStart(2, '0')}`;
+  }
+  function renderWardrobeCurrent(gender, archetype) {
+    const box = $('wardrobeCurrent'); box.replaceChildren();
+    const preview = make('div', 'agent-avatar'); const sprite = make('div', 'lpc');
+    if (wardrobePick !== null) sprite.style.backgroundImage = `url("${sheetUrl(wardrobeKey(gender, archetype, wardrobePick))}")`;
+    preview.append(sprite);
+    const label = make('div', 'wardrobe-label');
+    label.append(
+      make('b', '', wardrobePick === null ? 'No look chosen yet' : `LOOK ${String(wardrobePick + 1).padStart(2, '0')} OF 16`),
+      make('small', '', `${gender} · ${archetype} archetype · the identity underneath never changes`));
+    box.append(preview, label);
+  }
+  function openWardrobe() {
+    if (!window.__earthProfile) return open('mLogin');
+    const { gender, archetype } = wardrobeIdentity();
+    const spec = window.__earthProfile.avatarSpec;
+    wardrobePick = Number.isInteger(spec?.variant) && spec?.archetype === archetype ? spec.variant : null;
+    const grid = $('wardrobeGrid'); grid.replaceChildren();
+    for (let variant = 0; variant < 16; variant++) {
+      const tile = make('button', 'agent-avatar look'); tile.type = 'button';
+      tile.setAttribute('aria-label', `Look ${variant + 1} of 16`);
+      const sprite = make('div', 'lpc');
+      sprite.style.backgroundImage = `url("${sheetUrl(wardrobeKey(gender, archetype, variant))}")`;
+      tile.append(sprite, make('span', 'num', String(variant + 1).padStart(2, '0')));
+      if (variant === wardrobePick) tile.classList.add('on');
+      tile.onclick = () => {
+        grid.querySelectorAll('.look').forEach(look => look.classList.remove('on'));
+        tile.classList.add('on'); wardrobePick = variant; renderWardrobeCurrent(gender, archetype);
+      };
+      grid.append(tile);
+    }
+    renderWardrobeCurrent(gender, archetype);
+    open('mWardrobe');
+  }
+  $('wardrobeSave').onclick = async () => {
+    if (wardrobePick === null) return toast('Pick a look first.');
+    const response = await fetch('/api/avatar', {
+      method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify({ variant: wardrobePick }),
+    });
+    const data = await response.json();
+    if (!data.ok) return toast(data.why || 'The wardrobe refused that look');
+    close($('mWardrobe'));
+    await refreshSession();
+    toast('New look recorded. The world redraws your citizen within a minute.');
+  };
 
   // Disconnect lives in Settings; the nav button exists only for spectators.
   async function disconnectOwner() {

@@ -290,6 +290,28 @@ test('the mailbox is closed to anyone without an owner cookie', async () => {
   }
 });
 
+test('the wardrobe forwards a whole-number look to the Kernel and refuses the rest', async () => {
+  const spy = captureKernel({ ok: true, avatarSpec: { catalogKey: 'citizen_male_creative_07' } });
+  try {
+    const res = response();
+    await endpoint('avatar')({ method: 'POST', ...owned({ body: { variant: 7 } }) }, res);
+    assert.equal(res.statusCode, 200);
+    assert.match(spy.calls[0].url, /\/v1\/owner\/avatar$/);
+    assert.deepEqual(spy.calls[0].body, { variant: 7 });
+  } finally { spy.restore(); }
+
+  for (const variant of [16, -1, 2.5, 'green']) {
+    const res = response();
+    await endpoint('avatar')({ method: 'POST', ...owned({ body: { variant } }) }, res);
+    assert.equal(res.statusCode, 400, `variant ${variant} must be refused`);
+    assert.match(res.body.why, /16 numbered variants/);
+  }
+
+  const anonymous = response();
+  await endpoint('avatar')({ method: 'POST', headers: { host: 'home.test' }, body: { variant: 3 } }, anonymous);
+  assert.equal(anonymous.statusCode, 401, 'the wardrobe belongs to owners');
+});
+
 test('session and approvals answer a calm 200 anonymous for spectators', async () => {
   // Every visitor loads these two before signing in; a 401 would litter every
   // spectator console with errors for a perfectly ordinary state.

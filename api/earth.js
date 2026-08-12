@@ -61,6 +61,16 @@ const ROUTES = {
     body: (req) => ({ autonomy: req.body.autonomy }),
     failWhy: 'autonomy update refused',
   },
+  avatar: {
+    method: 'POST', kernelPath: '/v1/owner/avatar', sameOrigin: true,
+    check: (req) => {
+      const variant = Number(req.body?.variant);
+      return Number.isInteger(variant) && variant >= 0 && variant <= 15
+        ? null : 'a wardrobe look is one of the 16 numbered variants';
+    },
+    body: (req) => ({ variant: Number(req.body.variant) }),
+    failWhy: 'wardrobe update refused',
+  },
   'skill-policy': {
     method: 'POST', kernelPath: '/v1/owner/skill-policy', sameOrigin: true,
     check: (req) => (ONE_OF(req.body?.skillPolicy, ['safe_auto', 'ask_all']) ? null : 'invalid skill learning policy'),
