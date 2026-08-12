@@ -43,8 +43,10 @@ const ROUTES = {
     // a dash. Refreshing it here upgrades an existing session in place - same
     // token, same expiry, wider scope - with nobody having to reconnect.
     refreshCookie: true,
+    // A spectator asking who they are is normal, not an error.
+    anonymousOk: true,
   },
-  approvals: { method: 'GET', kernelPath: '/v1/owner/approvals', authWhy: 'not owner-bound', unavailable: 'Earth Kernel is temporarily unavailable' },
+  approvals: { method: 'GET', kernelPath: '/v1/owner/approvals', anonymousOk: true, authWhy: 'not owner-bound', unavailable: 'Earth Kernel is temporarily unavailable' },
   skills: { method: 'GET', kernelPath: '/v1/owner/skills', unavailable: 'Earth Kernel is temporarily unavailable' },
   wallet: { method: 'GET', kernelPath: '/v1/owner/wallet', unavailable: 'Earth Kernel is temporarily unavailable' },
 
@@ -445,6 +447,10 @@ module.exports = async function handler(req, res) {
   try {
     if (route.sameOrigin) requireSameOrigin(req);
     const token = ownerToken(req);
+    // Routes marked anonymousOk answer a calm 200 "not connected" instead of a
+    // 401, so every spectator page-load stops littering the console with
+    // errors for the entirely ordinary state of not being signed in.
+    if (!token && route.anonymousOk) return send(res, 200, { ok: false, anonymous: true });
     if (!token && !route.anonymous) return send(res, 401, { ok: false, why: route.authWhy || 'connect your agent first' });
 
     const refusal = route.check ? route.check(req) : null;

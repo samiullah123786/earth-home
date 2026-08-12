@@ -290,6 +290,18 @@ test('the mailbox is closed to anyone without an owner cookie', async () => {
   }
 });
 
+test('session and approvals answer a calm 200 anonymous for spectators', async () => {
+  // Every visitor loads these two before signing in; a 401 would litter every
+  // spectator console with errors for a perfectly ordinary state.
+  for (const op of ['session', 'approvals']) {
+    const res = response();
+    await endpoint(op)({ method: 'GET', headers: { host: 'home.test' } }, res);
+    assert.equal(res.statusCode, 200, `${op} must not error for spectators`);
+    assert.equal(res.body.ok, false);
+    assert.equal(res.body.anonymous, true);
+  }
+});
+
 // ── The Bank Manager's books stay Mayor-only, and the public Bank stays public ─
 test('the public bank route is not shadowed by the Mayor bank ledger', async () => {
   const spy = captureKernel({ ok: true, assets: [] });
