@@ -9,10 +9,11 @@ const endpoint = (op) => (req, res) => router({ ...req, query: { ...(req.query |
 
 function response() {
   return {
-    headers: {}, statusCode: 200, body: null,
+    headers: {}, statusCode: 200, body: null, raw: '',
     setHeader(key, value) { this.headers[key] = value; },
     status(code) { this.statusCode = code; return this; },
     json(value) { this.body = value; return this; },
+    end(value) { this.raw = String(value ?? ''); return this; },
   };
 }
 
@@ -310,6 +311,55 @@ test('the wardrobe forwards a whole-number look to the Kernel and refuses the re
   const anonymous = response();
   await endpoint('avatar')({ method: 'POST', headers: { host: 'home.test' }, body: { variant: 3 } }, anonymous);
   assert.equal(anonymous.statusCode, 401, 'the wardrobe belongs to owners');
+});
+
+// ── SEO surfaces: the sitemap and the server-rendered listing pages ────────
+test('the sitemap lists the static pages and every valid listing URL', async () => {
+  const spy = captureKernel({
+    ok: true,
+    listings: [
+      { id: 'asset:q17az3amva8f8k0grk3q4y62s18cas0s', name: 'quarry-pacing-guide' },
+      { id: 'not-a-listing-id', name: 'sneaky' },
+    ],
+    nextCursor: null,
+  });
+  try {
+    const res = response();
+    await endpoint('sitemap')({ method: 'GET', headers: { host: 'agentsearth.com' } }, res);
+    assert.equal(res.statusCode, 200);
+    assert.match(res.headers['Content-Type'] || res.headers['content-type'] || '', /xml/);
+    assert.match(res.raw, /<loc>https:\/\/agentsearth\.com\/market<\/loc>/);
+    assert.match(res.raw, /market\/l\/asset:q17az3amva8f8k0grk3q4y62s18cas0s/);
+    assert.doesNotMatch(res.raw, /not-a-listing-id/);
+  } finally { spy.restore(); }
+});
+
+test('a listing page renders escaped HTML with Product JSON-LD, and refuses bad ids', async () => {
+  const spy = captureKernel({
+    ok: true, id: 'asset:q17az3amva8f8k0grk3q4y62s18cas0s',
+    name: 'quarry-pacing-guide<script>alert(1)</script>',
+    oneLiner: 'Pace quarry shifts "safely" & well.',
+    price: 5, pulls: 2, digest: 'a'.repeat(64),
+    earthVerified: { algorithm: 'ed25519' }, author: { name: 'Scout' },
+  });
+  try {
+    const res = response();
+    await endpoint('listing')({
+      method: 'GET', headers: { host: 'agentsearth.com' },
+      query: { id: 'asset:q17az3amva8f8k0grk3q4y62s18cas0s' },
+    }, res);
+    assert.equal(res.statusCode, 200);
+    // The depositor's <script> arrives as text, never as markup.
+    assert.doesNotMatch(res.raw, /<script>alert/);
+    assert.match(res.raw, /&lt;script&gt;alert/);
+    assert.match(res.raw, /"@type":"Product"/);
+    assert.match(res.raw, /\\u003cscript/);
+    assert.match(res.raw, /EARTH VERIFIED/);
+  } finally { spy.restore(); }
+
+  const bad = response();
+  await endpoint('listing')({ method: 'GET', headers: { host: 'agentsearth.com' }, query: { id: '../../etc' } }, bad);
+  assert.equal(bad.statusCode, 404);
 });
 
 test('session and approvals answer a calm 200 anonymous for spectators', async () => {

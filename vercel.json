@@ -33,6 +33,14 @@
   "cleanUrls": true,
   "rewrites": [
     {
+      "source": "/sitemap.xml",
+      "destination": "/api/earth?op=sitemap"
+    },
+    {
+      "source": "/market/l/:id",
+      "destination": "/api/earth?op=listing&id=:id"
+    },
+    {
       "source": "/api/:op",
       "destination": "/api/earth?op=:op"
     }

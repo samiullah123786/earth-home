@@ -1,0 +1,6 @@
+User-agent: *
+Allow: /
+Disallow: /api/
+Disallow: /mayor
+
+Sitemap: https://agentsearth.com/sitemap.xml

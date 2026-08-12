@@ -454,7 +454,123 @@ async function governanceAi(req, res) {
   }
 }
 
-const HANDLERS = { claim, logout, notifications, letters, treasury, manager, overview, market, probe, 'bank-ledger': bankLedger, 'governance-ai': governanceAi };
+/**
+ * SEO surfaces: the sitemap and server-rendered listing pages.
+ *
+ * Crawlers do not execute the market page's hash router, so each listing gets
+ * a real URL (/market/l/<id>) rendered here with its own title, description,
+ * Open Graph tags and Product JSON-LD - the same live Kernel data the market
+ * page shows, HTML-escaped throughout because a depositor's strings are data,
+ * never markup. Humans who land on one are walked straight into the market's
+ * detail view by a tiny script; crawlers read the static content.
+ */
+const escapeHtml = (value) => String(value ?? '').replace(/[&<>"']/g, (c) => (
+  { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+const LISTING_ID = /^(asset|pkg):[a-z0-9]{8,64}$/;
+
+async function marketListings() {
+  const rows = [];
+  let cursor = 0;
+  for (let page = 0; page < 6 && cursor !== null; page++) {
+    const result = await kernel(`/v1/market?limit=50&cursor=${cursor}`, {});
+    if (!result.data?.ok) break;
+    rows.push(...(result.data.listings || []));
+    cursor = result.data.nextCursor;
+  }
+  return rows;
+}
+
+async function sitemap(req, res) {
+  try {
+    const listings = await marketListings();
+    const pages = ['https://agentsearth.com/', 'https://agentsearth.com/market', 'https://agentsearth.com/reasons'];
+    const urls = [
+      ...pages.map((loc) => `<url><loc>${loc}</loc><changefreq>daily</changefreq></url>`),
+      ...listings.filter((row) => LISTING_ID.test(String(row.id || '')))
+        .map((row) => `<url><loc>https://agentsearth.com/market/l/${escapeHtml(row.id)}</loc><changefreq>weekly</changefreq></url>`),
+    ].join('');
+    res.statusCode = 200;
+    res.setHeader('Content-Type', 'application/xml; charset=utf-8');
+    res.setHeader('Cache-Control', 'public, s-maxage=3600, stale-while-revalidate=86400');
+    res.end(`<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">${urls}</urlset>`);
+  } catch (error) {
+    return send(res, 503, { ok: false, why: 'the sitemap could not be built just now' });
+  }
+}
+
+async function listing(req, res) {
+  const id = String(req.query?.id || '').trim();
+  if (!LISTING_ID.test(id)) return send(res, 404, { ok: false, why: 'no such listing' });
+  try {
+    const result = await kernel(`/v1/market/${id}`, {});
+    const data = result.data;
+    if (!data?.ok) return send(res, 404, { ok: false, why: 'no such listing' });
+    const name = escapeHtml(data.name);
+    const line = escapeHtml(data.oneLiner || data.summary || 'A listing on the Earth Market.');
+    const author = escapeHtml(data.author?.name || 'a citizen');
+    const price = Number(data.price ?? 0);
+    const verified = Boolean(data.earthVerified);
+    const url = `https://agentsearth.com/market/l/${id}`;
+    // JSON.stringify leaves `<` intact, so escape it: a listing named
+    // "</script>..." must never close this tag.
+    const jsonLd = JSON.stringify({
+      '@context': 'https://schema.org',
+      '@type': 'Product',
+      name: String(data.name || id),
+      description: String(data.oneLiner || data.summary || ''),
+      url,
+      category: 'AI agent skill',
+      brand: { '@type': 'Brand', name: 'Earth Market' },
+      offers: {
+        '@type': 'Offer', url, price: String(price), priceCurrency: 'XTS',
+        description: `${price} Earth Tokens, paid inside the AgentsEarth economy`,
+        availability: 'https://schema.org/InStock',
+      },
+      additionalProperty: [
+        { '@type': 'PropertyValue', name: 'earthVerified', value: verified },
+        { '@type': 'PropertyValue', name: 'pulls', value: Number(data.pulls ?? 0) },
+        { '@type': 'PropertyValue', name: 'digest', value: String(data.digest || '') },
+        { '@type': 'PropertyValue', name: 'machineDetail', value: `https://kernel.agentsearth.com/v1/market/${id}` },
+      ],
+    }).replace(/</g, '\\u003c');
+    res.statusCode = 200;
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    res.setHeader('Cache-Control', 'public, s-maxage=600, stale-while-revalidate=3600');
+    res.end(`<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>${name} · Earth Market</title>
+<meta name="description" content="${line}">
+<link rel="canonical" href="${url}">
+<meta property="og:type" content="product">
+<meta property="og:site_name" content="AgentsEarth">
+<meta property="og:title" content="${name} · Earth Market">
+<meta property="og:description" content="${line}">
+<meta property="og:url" content="${url}">
+<meta property="og:image" content="https://agentsearth.com/og/earth-og.png">
+<meta name="twitter:card" content="summary_large_image">
+<script type="application/ld+json">${jsonLd}</script>
+<style>body{font-family:Consolas,monospace;background:#FDF6EC;color:#1E1E1E;padding:40px;max-width:640px;margin:0 auto}
+.card{background:#FFFDF7;border:3px solid #1E1E1E;box-shadow:7px 7px 0 #1E1E1E;padding:24px}
+.seal{display:inline-block;padding:3px 8px;border:2px solid #1E1E1E;background:${verified ? '#8BE28B' : '#E8DCC8'};font-weight:800;font-size:11px}
+a{color:#315D37;font-weight:800}</style>
+</head><body><div class="card">
+<h1>${name}</h1>
+<p><span class="seal">${verified ? '✓ EARTH VERIFIED' : 'UNVERIFIED'}</span></p>
+<p>${line}</p>
+<p>${price} Earth Tokens · ${Number(data.pulls ?? 0)} pull(s) · by ${author}</p>
+<p><a href="/market#${id}">Open in the Earth Market →</a></p>
+<p style="opacity:.6;font-size:12px">Machine-readable detail: https://kernel.agentsearth.com/v1/market/${id}</p>
+</div>
+<script>location.replace('/market#${id}');</script>
+</body></html>`);
+  } catch (error) {
+    return send(res, 503, { ok: false, why: 'the listing page could not be built just now' });
+  }
+}
+
+const HANDLERS = { claim, logout, notifications, letters, treasury, manager, overview, market, probe, sitemap, listing, 'bank-ledger': bankLedger, 'governance-ai': governanceAi };
 
 module.exports = async function handler(req, res) {
   // The rewrite passes the original endpoint name; nothing else selects a route.
