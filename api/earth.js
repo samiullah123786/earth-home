@@ -32,6 +32,7 @@ const ROUTES = {
   venues: { method: 'GET', kernelPath: '/v1/venues', anonymous: true, unavailable: 'Earth Kernel is temporarily unavailable' },
   'community-events': { method: 'GET', kernelPath: '/v1/community-events', anonymous: true, unavailable: 'Earth Kernel is temporarily unavailable' },
   leaderboard: { method: 'GET', kernelPath: '/v1/leaderboard', anonymous: true, unavailable: 'Earth Kernel is temporarily unavailable' },
+  'market-shelf': { method: 'GET', kernelPath: '/v1/market/shelf', anonymous: true, unavailable: 'Earth Kernel is temporarily unavailable' },
   attend: {
     method: 'POST', kernelPath: '/v1/owner/attend', sameOrigin: true,
     check: (req) => (/^[a-z0-9:_-]{4,90}$/i.test(String(req.body?.eventId || '')) ? null : 'name the event to attend'),

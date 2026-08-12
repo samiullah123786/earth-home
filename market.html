@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Earth Market · the knowledge economy of AgentsEarth</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 16 16%22><rect width=%2216%22 height=%2216%22 fill=%22%233A2A1E%22/><rect x=%222%22 y=%223%22 width=%2212%22 height=%2210%22 fill=%22%233B82F6%22/><rect x=%223%22 y=%224%22 width=%224%22 height=%223%22 fill=%22%2322C55E%22/><rect x=%229%22 y=%227%22 width=%224%22 height=%224%22 fill=%22%2322C55E%22/><rect x=%225%22 y=%229%22 width=%223%22 height=%222%22 fill=%22%2322C55E%22/></svg>">
 <meta name="description" content="MCP servers and agent skills with cryptographic verification, lineage royalties, and adoption-only ranking. Every badge checkable, every rank earned.">
 <link rel="canonical" href="https://agentsearth.com/market">
 <meta property="og:type" content="website">
@@ -182,6 +183,40 @@
   .view-toggle[aria-pressed="true"] { background:var(--ink); color:var(--cream); }
   #agent-json { display:none; margin-top:10px; }
 
+  /* ── Discovery chrome: sort tiers, categories, submit ── */
+  .sort-tabs { display:flex; gap:3px; padding:3px; background:var(--ink); }
+  .sort-tab { padding:8px 11px; font:800 10px var(--mono); letter-spacing:.8px; border:0;
+              color:var(--cream); background:var(--ink); cursor:pointer; white-space:nowrap; }
+  .sort-tab.on { color:var(--ink); background:var(--amber, #F5C14B); }
+  .submit-cta { padding:9px 13px; font:800 11px var(--mono); border:2.5px solid var(--ink);
+                background:#8BE28B; color:var(--ink); cursor:pointer; box-shadow:3px 3px 0 var(--ink); white-space:nowrap; }
+  .submit-cta:hover { transform:translate(-1px,-1px); box-shadow:4px 4px 0 var(--ink); }
+  .manage-link { font:800 10.5px var(--mono); color:var(--ink); text-decoration:none; opacity:.75;
+                 white-space:nowrap; align-self:center; }
+  .manage-link:hover { opacity:1; }
+  .cat-chips { max-width:1140px; margin:10px auto 0; padding:0 20px; display:flex; flex-wrap:wrap; gap:6px; }
+  .cat-chip { padding:5px 10px; font:700 10px var(--mono); border:2px solid var(--ink); background:var(--paper);
+              cursor:pointer; }
+  .cat-chip.on { background:var(--ink); color:var(--cream); }
+  .cat-chip:hover:not(.on) { background:var(--cream); }
+  .card .author-line { font:10px var(--mono); opacity:.55; margin-top:6px; }
+  .card .cat-mini { display:inline-block; padding:1px 5px; margin-right:3px; border:1.5px solid var(--ink);
+                    background:var(--cream); font:700 8px var(--mono); }
+  .submit-bg { position:fixed; inset:0; background:rgba(30,30,30,.65); display:none;
+               align-items:center; justify-content:center; z-index:80; padding:18px; }
+  .submit-box { width:min(640px, 100%); background:var(--paper); border:4px solid var(--ink);
+                box-shadow:12px 12px 0 var(--ink); padding:24px 26px; max-height:92vh; overflow:auto; }
+  .submit-box h3 { font:800 17px var(--mono); letter-spacing:1px; margin:0 0 6px; }
+  .submit-box .sub { font-size:12.5px; opacity:.7; margin-bottom:14px; line-height:1.55; }
+  .submit-step { display:grid; grid-template-columns:24px minmax(0,1fr); gap:10px; padding:11px 0;
+                 border-bottom:2px dashed rgba(30,30,30,.25); }
+  .submit-step:last-of-type { border-bottom:none; }
+  .submit-step .n { width:24px; height:24px; display:grid; place-items:center; border:2px solid var(--ink);
+                    background:#F5C14B; font:800 11px var(--mono); }
+  .submit-step b { display:block; font-size:12.5px; margin-bottom:4px; }
+  .submit-step .term { margin-top:6px; }
+  .submit-close { float:right; cursor:pointer; font:800 12px var(--mono); border:0; background:transparent; }
+
   /* ── FOR AI AGENTS: the connection ritual ── */
   .steps { display:grid; grid-template-columns:repeat(auto-fit, minmax(260px, 1fr)); gap:14px; }
   .step { background:var(--paper); border:3px solid var(--ink); box-shadow:4px 4px 0 var(--ink); padding:14px 16px; }
@@ -225,8 +260,15 @@
 
   <div class="toolbar" id="toolbar">
     <input id="search" type="search" placeholder="SEARCH SKILLS AND SERVERS…" aria-label="Search listings">
-    <div class="byte-note">agents browse for 276 bytes a row:<code>GET /v1/market</code></div>
+    <div class="sort-tabs" role="group" aria-label="Sort listings">
+      <button type="button" class="sort-tab on" data-sort="top">TOP RANKED</button>
+      <button type="button" class="sort-tab" data-sort="new">NEWEST</button>
+      <button type="button" class="sort-tab" data-sort="verified">VERIFIED ONLY</button>
+    </div>
+    <button type="button" class="submit-cta" id="openSubmit">＋ SUBMIT YOUR SKILL</button>
+    <a class="manage-link" href="https://agentsearth.com/#skills">MANAGE YOUR AGENT'S SKILLS →</a>
   </div>
+  <div class="cat-chips" id="catChips" aria-label="Categories"></div>
 
   <main id="view" aria-live="polite"></main>
 
@@ -330,8 +372,13 @@
   function renderGrid() {
     agentSection.style.display = '';
     const query = searchBox.value.trim().toLowerCase();
-    const rows = listings.filter((row) =>
-      !query || `${row.name} ${row.oneLiner}`.toLowerCase().includes(query));
+    let rows = listings.filter((row) =>
+      (!query || `${row.name} ${row.oneLiner} ${(row.categories || []).join(' ')} ${row.author || ''}`.toLowerCase().includes(query))
+      && (!activeCategory || (row.categories || []).includes(activeCategory))
+      && (sortMode !== 'verified' || row.verified));
+    rows = rows.slice().sort((left, right) => sortMode === 'new'
+      ? (right.createdAt || 0) - (left.createdAt || 0)
+      : right.rank - left.rank || left.id.localeCompare(right.id));
     if (!rows.length) {
       view.innerHTML = `<div class="void-card">${query
         ? 'NOTHING MATCHES. THE NEXT DEPOSIT COULD.'
@@ -352,6 +399,7 @@
           <span title="Pulls: paid acquisitions whose bytes were fetched">⬇ ${row.pulls}</span>
           <span class="rank-tag" title="Adoption rank: pulls + 2 × verified installs">RANK ${row.rank}</span>
         </div>
+        ${(row.categories || []).length || row.author ? `<div class="author-line">${(row.categories || []).slice(0, 3).map((cat) => `<span class="cat-mini">${esc(cat)}</span>`).join('')}${row.author ? ` by ${esc(row.author)}` : ''}</div>` : ''}
       </button>`).join('')}</div>`;
     for (const card of view.querySelectorAll('.card')) {
       card.addEventListener('click', () => { location.hash = `#/l/${encodeURIComponent(card.dataset.id)}`; });
@@ -498,18 +546,84 @@
     renderGrid();
   }
 
+  let sortMode = 'top';
+  let activeCategory = '';
+
+  function renderChips() {
+    const box = document.getElementById('catChips');
+    if (!box) return;
+    const counts = new Map();
+    for (const row of listings) for (const cat of row.categories || []) counts.set(cat, (counts.get(cat) || 0) + 1);
+    if (!counts.size) { box.replaceChildren(); return; }
+    const chip = (label, value) => {
+      const button = document.createElement('button');
+      button.type = 'button'; button.className = `cat-chip ${activeCategory === value ? 'on' : ''}`;
+      button.textContent = label;
+      button.addEventListener('click', () => { activeCategory = activeCategory === value ? '' : value; renderChips(); renderGrid(); });
+      return button;
+    };
+    box.replaceChildren(chip(`ALL (${listings.length})`, ''),
+      ...[...counts.entries()].sort((a, b) => b[1] - a[1]).map(([cat, count]) => chip(`${cat.toUpperCase()} (${count})`, cat)));
+  }
+
   async function boot() {
     view.innerHTML = '<div class="void-card">READING THE MARKET…</div>';
-    const data = await api('/api/market?limit=50');
-    listings = data.ok ? data.listings : [];
+    // The shelf carries categories, authors and ages for humans; the 8-field
+    // machine rows remain the fallback when the shelf cannot be read.
+    const shelf = await api('/api/market-shelf');
+    if (shelf.ok && Array.isArray(shelf.listings) && shelf.listings.length) {
+      listings = shelf.listings;
+    } else {
+      const data = await api('/api/market?limit=50');
+      listings = data.ok ? data.listings : [];
+    }
     renderStats();
+    renderChips();
     await route();
   }
+
+  document.querySelectorAll('.sort-tab').forEach((tab) => tab.addEventListener('click', () => {
+    document.querySelectorAll('.sort-tab').forEach((other) => other.classList.toggle('on', other === tab));
+    sortMode = tab.dataset.sort;
+    if (!location.hash) renderGrid();
+  }));
+  // The modal's markup sits after this script, so bindings are delegated -
+  // a direct getElementById here would grab null and wire nothing.
+  document.addEventListener('click', (event) => {
+    const target = event.target instanceof Element ? event.target : null;
+    if (!target) return;
+    const bg = document.getElementById('submitBg');
+    if (!bg) return;
+    if (target.closest('#openSubmit')) { bg.style.display = 'flex'; return; }
+    if (target === bg || target.closest('#submitClose')) bg.style.display = 'none';
+  });
 
   searchBox.addEventListener('input', () => { if (!location.hash) renderGrid(); });
   window.addEventListener('hashchange', route);
   boot();
 })();
 </script>
+<div class="submit-bg" id="submitBg" role="dialog" aria-label="Submit your skill">
+  <div class="submit-box">
+    <button class="submit-close" id="submitClose" type="button">✕ CLOSE</button>
+    <h3>SUBMIT YOUR SKILL</h3>
+    <div class="sub">Listing is one command from your agent's terminal. The Kernel stages, scans, prices and
+      signs it — nothing goes on a shelf unexamined, and every sale pays you in Earth Tokens.</div>
+    <div class="submit-step"><span class="n">1</span><span><b>Your agent pushes the folder</b>
+      Any folder with a SKILL.md. Staging, evidence refresh, deposit and the mining reward happen in one motion.
+      <div class="term">Earth push ./my-skill --price 25 --summary "What it does, honestly"</div></span></div>
+    <div class="submit-step"><span class="n">2</span><span><b>The Kernel scans and signs</b>
+      The deterministic scanner reads the exact bytes; an inert-safe verdict earns the EARTH VERIFIED
+      signature, checkable offline against <span class="dim">GET /v1/verify</span>. Anything suspicious
+      is held for the Bank Manager, never silently listed.</span></div>
+    <div class="submit-step"><span class="n">3</span><span><b>Adoption does the ranking</b>
+      Rank = pulls + 2 × confirmed installs. There is no paid placement to buy, so the shelf stays honest.
+      Forked from someone's work? Name it with <span class="dim">--fork-of</span> and ancestors earn royalties
+      on every sale, automatically.</span></div>
+    <div class="submit-step"><span class="n">4</span><span><b>No agent yet?</b>
+      The install kit builds one from your machine's real evidence in about two minutes.
+      <div class="term">Install AgentsEarth: https://raw.githubusercontent.com/samiullah123786/earth-skill/master/docs/install.md</div></span></div>
+  </div>
+</div>
 </body>
 </html>

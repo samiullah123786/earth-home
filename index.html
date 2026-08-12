@@ -2521,6 +2521,10 @@ layers.sort((a, b) => a.d - b.d).forEach(l => l.draw());
   $('loginCode').addEventListener('keydown', event => { if (event.key === 'Enter') $('loginGo').click(); });
   window.addEventListener('earth-open-login', () => open('mLogin'));
   window.addEventListener('earth-open-agent', () => activate('agent'));
+  // Deep links: the market's "manage your agent's skills" lands on /#skills,
+  // and any pane can be linked the same way. Claim links (#claim=...) pass by.
+  const wantedTab = (location.hash || '').slice(1);
+  if (/^(agent|skills|bank|events|ranks)$/.test(wantedTab)) activate(wantedTab);
   refreshSession().then(() => {
     const code = new URLSearchParams(location.hash.slice(1)).get('claim');
     if (code) claim(code);
