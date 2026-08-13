@@ -44,5 +44,10 @@
       "source": "/api/:op",
       "destination": "/api/earth?op=:op"
     }
-  ]
+  ],
+  "functions": {
+    "api/earth.js": {
+      "maxDuration": 15
+    }
+  }
 }
