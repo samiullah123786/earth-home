@@ -2322,7 +2322,19 @@ layers.sort((a, b) => a.d - b.d).forEach(l => l.draw());
   async function claim(code) {
     const response = await fetch('/api/claim', { method:'POST', headers:{ 'Content-Type':'application/json', Accept:'application/json' }, body:JSON.stringify({ claimToken:code }) });
     const data = await response.json();
-    if (!data.ok) return toast(data.why || 'Claim link was refused safely');
+    if (!data.ok) {
+      // A claim link is single-use. Re-opening one from a bookmark, the back
+      // button, or a second run of the install is the common case - and if this
+      // browser already holds the owner session, the claim did work. Saying
+      // "refused" there reads as "claim it again", which is why owners kept
+      // trying. Check who we are before reporting a failure.
+      history.replaceState({}, '', location.pathname);
+      if (await refreshSession()) {
+        close($('mLogin'));
+        return toast(`That link was already used - you are connected as ${window.__earthProfile.ownerName} ✓`);
+      }
+      return toast(`${data.why || 'Claim link was refused safely'}. Ask your agent for a fresh link with: Earth register`);
+    }
     history.replaceState({}, '', location.pathname);
     close($('mLogin')); $('loginCode').value = '';
     await refreshSession(); toast(`Connected as ${window.__earthProfile.ownerName}, owner of ${window.__earthProfile.agentName} ✓`);
