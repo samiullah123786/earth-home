@@ -474,7 +474,7 @@
   </div>
   <div class="tabs" id="tabs">
     <div class="tab on" data-tab="world">WORLD</div><div class="tab" data-tab="agent">MY AGENT</div><div class="tab" data-tab="skills">SKILLS</div>
-    <div class="tab" data-tab="bank">EARTH BANK</div>
+    <div class="tab" data-tab="bank">EARTH BANK</div><div class="tab" data-tab="mcp">MCP SERVERS</div>
     <a class="tab tab-market" href="/market" title="The vault's public face: verified skills, adoption ranks, fork royalties">
       <img src="/currency/earth_token_32.png" width="14" height="14" alt="" style="image-rendering:pixelated"> EARTH MARKET ↗</a>
     <div class="tab" data-tab="events">EVENTS</div><div class="tab" data-tab="ranks">RANKS</div>
@@ -1188,6 +1188,24 @@ layers.sort((a, b) => a.d - b.d).forEach(l => l.draw());
         <div class="lb-columns" id="leaderboards"><div class="row"><span class="grow"><small>Counting…</small></span></div></div>
       </div>`,
   };
+  panes.mcp = () => `
+    <div class="pane-grid">
+      <div class="pane-card"><h3>■ MCP SERVERS · TOOLS YOUR AGENT CAN RUN</h3>
+        <div class="row"><span class="grow"><small>A skill is knowledge your agent reads. An MCP server is a program that hands it new tools. Every listing shows what it will reach for before you install it, and the config below is generated from what the server actually declares.</small></span></div>
+        <div class="row" style="gap:8px;flex-wrap:wrap">
+          <input id="mcpQuery" class="inp" placeholder="Search servers · try &quot;postgres&quot; or &quot;browser automation&quot;" style="flex:1 1 260px" />
+          <button class="mini-btn go" id="mcpGo">SEARCH</button>
+        </div>
+        <div id="mcpCats" class="row" style="gap:6px;flex-wrap:wrap"><small>Loading categories…</small></div>
+      </div>
+      <div class="pane-card"><h3>■ REGISTRY</h3>
+        <div id="mcpList"><div class="row"><span class="grow"><small>Reading the registry…</small></span></div></div>
+      </div>
+    </div>
+    <div class="pane-card" id="mcpDetailCard" hidden><h3 id="mcpDetailTitle">■ SERVER</h3>
+      <div id="mcpDetail"></div>
+    </div>`;
+
   panes.bank = () => `
     <div class="pane-grid">
       <div class="pane-card"><h3>■ THE EARTH BANK · LIVE VAULT</h3>
@@ -1321,6 +1339,13 @@ layers.sort((a, b) => a.d - b.d).forEach(l => l.draw());
     $('panes').style.display = isWorld ? 'none' : 'block';
     if (!isWorld) {
       if (tab === 'skills') { renderSkillsPane(); loadOwnerSkills(); loadEarthSkills(); }
+      else if (tab === 'mcp') {
+        $('panes').innerHTML = panes.mcp(); wire($('panes'));
+        const run = () => loadMcpServers($('mcpQuery').value.trim());
+        $('mcpGo').onclick = run;
+        $('mcpQuery').addEventListener('keydown', (event) => { if (event.key === 'Enter') run(); });
+        loadMcpCategories(); loadMcpServers();
+      }
       else { $('panes').innerHTML = panes[tab](); wire($('panes')); if (tab === 'events') { loadCommunityEvents(); loadVenues(); }
              if (tab === 'ranks') loadLeaderboards();
              if (tab === 'treasury') { loadTreasury(); loadManager(); } if (tab === 'agent') loadWallet();
@@ -2261,6 +2286,164 @@ layers.sort((a, b) => a.d - b.d).forEach(l => l.draw());
     await loadTreasury();
   }
 
+  /* ── The MCP registry ────────────────────────────────────────────────── */
+  // What a badge actually means, in words, because "subprocess" tells a reader
+  // nothing on its own and this is the disclosure the whole listing turns on.
+  const MCP_BADGE = {
+    network: ['NETWORK', 'reaches the internet'],
+    subprocess: ['RUNS LOCALLY', 'starts a program on your machine'],
+    container: ['DOCKER', 'runs inside a container'],
+    credentials: ['NEEDS A KEY', 'you must supply a secret'],
+    filesystem: ['FILES', 'reads paths you point it at'],
+    'read-only': ['READ ONLY', 'every tool only reads'],
+  };
+  let mcpCategory = '';
+
+  function mcpBadges(capabilities) {
+    const wrap = document.createElement('span');
+    wrap.className = 'badges';
+    for (const capability of capabilities || []) {
+      const [label, why] = MCP_BADGE[capability] || [capability.toUpperCase(), capability];
+      const chip = document.createElement('b');
+      chip.className = 'chip';
+      chip.textContent = label;
+      chip.title = why;
+      wrap.append(chip);
+    }
+    return wrap;
+  }
+
+  async function loadMcpCategories() {
+    const rail = $('mcpCats');
+    if (!rail) return;
+    try {
+      const data = await (await fetch('/api/mcp-categories', { headers: { Accept: 'application/json' } })).json();
+      rail.replaceChildren();
+      const all = document.createElement('button');
+      all.className = 'mini-btn' + (mcpCategory ? '' : ' go');
+      all.textContent = 'ALL';
+      all.onclick = () => { mcpCategory = ''; loadMcpCategories(); loadMcpServers(); };
+      rail.append(all);
+      for (const entry of (data.categories || []).slice(0, 14)) {
+        const button = document.createElement('button');
+        button.className = 'mini-btn' + (mcpCategory === entry.slug ? ' go' : '');
+        button.textContent = `${entry.slug.toUpperCase()} ${entry.count}`;
+        button.onclick = () => { mcpCategory = entry.slug; loadMcpCategories(); loadMcpServers(); };
+        rail.append(button);
+      }
+    } catch { rail.textContent = 'Categories are unavailable right now.'; }
+  }
+
+  async function loadMcpServers(query) {
+    const list = $('mcpList');
+    if (!list) return;
+    list.replaceChildren(Object.assign(document.createElement('div'), { className: 'skel-row' }));
+    const params = new URLSearchParams();
+    if (mcpCategory) params.set('category', mcpCategory);
+    const url = query
+      ? `/api/mcp-search?q=${encodeURIComponent(query)}${mcpCategory ? `&category=${mcpCategory}` : ''}`
+      : `/api/mcp-servers?${params.toString()}&sort=installs&limit=40`;
+    try {
+      const data = await (await fetch(url, { headers: { Accept: 'application/json' } })).json();
+      const servers = data.servers || [];
+      list.replaceChildren();
+      if (!servers.length) {
+        const row = document.createElement('div'); row.className = 'row';
+        row.innerHTML = '<span class="grow"><small>Nothing matched. Try a broader word.</small></span>';
+        list.append(row);
+        return;
+      }
+      for (const server of servers) {
+        const row = document.createElement('div'); row.className = 'row';
+        const copy = document.createElement('span'); copy.className = 'grow';
+        const name = document.createElement('b'); name.textContent = server.displayName || server.name;
+        const detail = document.createElement('small');
+        detail.textContent = `${server.description.slice(0, 150)} · ${server.toolCount} tool(s) · ${server.authorName}`;
+        copy.append(name, detail, mcpBadges(server.capabilities));
+        const open = document.createElement('button');
+        open.className = 'mini-btn go'; open.textContent = 'VIEW';
+        open.onclick = () => openMcpServer(server.serverId);
+        row.append(copy, open);
+        list.append(row);
+      }
+    } catch { list.textContent = 'The registry is unavailable right now.'; }
+  }
+
+  async function openMcpServer(serverId) {
+    const card = $('mcpDetailCard'); const body = $('mcpDetail');
+    if (!card || !body) return;
+    card.hidden = false;
+    body.replaceChildren(Object.assign(document.createElement('div'), { className: 'skel-row' }));
+    card.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    let server;
+    try {
+      const data = await (await fetch(`/api/mcp-server?id=${encodeURIComponent(serverId)}`,
+        { headers: { Accept: 'application/json' } })).json();
+      server = data.server;
+    } catch { /* handled below */ }
+    if (!server) { body.textContent = 'That server could not be read.'; return; }
+
+    $('mcpDetailTitle').textContent = `■ ${(server.displayName || server.name).toUpperCase()}`;
+    body.replaceChildren();
+    const add = (node) => body.append(node);
+    const rowOf = (html) => { const row = document.createElement('div'); row.className = 'row'; row.innerHTML = html; return row; };
+
+    const head = document.createElement('div'); head.className = 'row';
+    const headCopy = document.createElement('span'); headCopy.className = 'grow';
+    headCopy.append(Object.assign(document.createElement('small'), { textContent: server.description }));
+    headCopy.append(mcpBadges(server.capabilities));
+    head.append(headCopy);
+    add(head);
+
+    add(rowOf(`<span class="grow"><small><b>Author</b> ${esc(server.authorName)} · <b>Version</b> ${esc(server.version)}`
+      + ` · <b>Transport</b> ${esc(server.transport)} · <b>Runtime</b> ${esc(server.runtime)}`
+      + `${server.license ? ` · <b>Licence</b> ${esc(server.license)}` : ''}</small></span>`));
+    if (server.repository) {
+      add(rowOf(`<span class="grow"><small><b>Source</b> <a href="${esc(server.repository)}" target="_blank" rel="noopener noreferrer">${esc(server.repository)}</a></small></span>`));
+    }
+    // Say plainly where a row came from and what Earth did or did not check.
+    if (server.safetyNote) add(rowOf(`<span class="grow"><small>${esc(server.safetyNote)}</small></span>`));
+
+    if (server.tools?.length) {
+      add(rowOf(`<span class="grow"><b>Tools it adds (${server.tools.length})</b><small>${
+        server.tools.slice(0, 40).map((tool) => esc(tool.name)).join(' · ')}</small></span>`));
+    }
+    if (server.userConfig?.length) {
+      add(rowOf(`<span class="grow"><b>You will need to supply</b><small>${
+        server.userConfig.map((field) => `${esc(field.title)}${field.sensitive ? ' (secret)' : ''}`).join(' · ')}</small></span>`));
+    }
+
+    // The install matrix: one tab per client, because they genuinely differ and
+    // a catalogue that shows one snippet works for exactly one client.
+    const tabs = document.createElement('div'); tabs.className = 'row'; tabs.style.gap = '6px'; tabs.style.flexWrap = 'wrap';
+    const pathLine = document.createElement('div'); pathLine.className = 'row';
+    const pre = document.createElement('pre');
+    pre.style.cssText = 'white-space:pre-wrap;overflow-x:auto;max-width:100%;background:var(--ink,#1e1e1e);color:#f4f1e8;padding:10px;font-size:12px';
+    const copyBtn = document.createElement('button'); copyBtn.className = 'mini-btn go'; copyBtn.textContent = 'COPY';
+    const show = (entry) => {
+      for (const child of tabs.children) child.classList.toggle('go', child.dataset.client === entry.client.id);
+      pathLine.innerHTML = `<span class="grow"><small><b>Put it in</b> <code>${esc(entry.configPath)}</code>${
+        entry.unsupported ? ` — <b>${esc(entry.unsupported)}</b>` : ''}</small></span>`;
+      pre.textContent = entry.snippet;
+      copyBtn.onclick = async () => {
+        try { await navigator.clipboard.writeText(entry.snippet); toast(`Config for ${entry.client.name} copied.`); }
+        catch { toast('Copy was blocked. Select the text and copy it manually.'); }
+      };
+    };
+    for (const entry of server.install || []) {
+      const tab = document.createElement('button');
+      tab.className = 'mini-btn'; tab.dataset.client = entry.client.id; tab.textContent = entry.client.name.toUpperCase();
+      tab.onclick = () => show(entry);
+      tabs.append(tab);
+    }
+    add(rowOf('<span class="grow"><b>Install it</b><small>Pick your client. Nothing here is a secret — a value you must provide appears as a visible blank.</small></span>'));
+    add(tabs); add(pathLine);
+    const preRow = document.createElement('div'); preRow.className = 'row';
+    const preWrap = document.createElement('span'); preWrap.className = 'grow'; preWrap.append(pre);
+    preRow.append(preWrap, copyBtn); add(preRow);
+    if (server.install?.length) show(server.install[0]);
+  }
+
   async function loadEarthSkills() {
     const body = $('earthSkillsBody');
     if (!body) return;
@@ -2547,7 +2730,7 @@ layers.sort((a, b) => a.d - b.d).forEach(l => l.draw());
   // Deep links: the market's "manage your agent's skills" lands on /#skills,
   // and any pane can be linked the same way. Claim links (#claim=...) pass by.
   const wantedTab = (location.hash || '').slice(1);
-  if (/^(agent|skills|bank|events|ranks)$/.test(wantedTab)) activate(wantedTab);
+  if (/^(agent|skills|bank|mcp|events|ranks)$/.test(wantedTab)) activate(wantedTab);
   refreshSession().then(() => {
     const code = new URLSearchParams(location.hash.slice(1)).get('claim');
     if (code) claim(code);

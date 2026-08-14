@@ -19,6 +19,25 @@ const { clearOwnerCookie, kernel, ownerToken, requireSameOrigin, send, setOwnerC
 const ONE_OF = (value, allowed) => allowed.includes(value);
 
 /**
+ * Rebuild a query string from named parameters only.
+ *
+ * Values are re-encoded rather than copied, so nothing a caller writes reaches
+ * the Kernel as written, and a parameter this proxy does not know about simply
+ * does not travel.
+ */
+const pick = (req, names) => {
+  const params = new URLSearchParams();
+  for (const name of names) {
+    const value = req.query?.[name];
+    if (value === undefined || value === null) continue;
+    const text = String(Array.isArray(value) ? value[0] : value).trim().slice(0, 120);
+    if (text) params.set(name, text);
+  }
+  const query = params.toString();
+  return query ? `?${query}` : '';
+};
+
+/**
  * Each route declares its method, whether it needs an owner session, and how to
  * turn a request into a Kernel call. `check` returns an error string to refuse
  * with, or nothing to proceed.
@@ -33,6 +52,37 @@ const ROUTES = {
   'community-events': { method: 'GET', kernelPath: '/v1/community-events', anonymous: true, unavailable: 'Earth Kernel is temporarily unavailable' },
   leaderboard: { method: 'GET', kernelPath: '/v1/leaderboard', anonymous: true, unavailable: 'Earth Kernel is temporarily unavailable' },
   'market-shelf': { method: 'GET', kernelPath: '/v1/market/shelf', anonymous: true, unavailable: 'Earth Kernel is temporarily unavailable' },
+
+  // The MCP registry, readable by anyone. Only these parameters travel, and
+  // each is re-encoded rather than passed through as written.
+  'mcp-servers': {
+    method: 'GET', kernelPath: '/v1/mcp/servers', anonymous: true,
+    query: (req) => pick(req, ['category', 'transport', 'capability', 'sort', 'limit']),
+    unavailable: 'The MCP registry is temporarily unavailable',
+  },
+  'mcp-search': {
+    method: 'GET', kernelPath: '/v1/mcp/search', anonymous: true,
+    query: (req) => pick(req, ['q', 'category', 'limit']),
+    unavailable: 'The MCP registry is temporarily unavailable',
+  },
+  'mcp-categories': {
+    method: 'GET', kernelPath: '/v1/mcp/categories', anonymous: true,
+    unavailable: 'The MCP registry is temporarily unavailable',
+  },
+  'mcp-clients': {
+    method: 'GET', kernelPath: '/v1/mcp/clients', anonymous: true,
+    unavailable: 'The MCP registry is temporarily unavailable',
+  },
+  'mcp-server': {
+    method: 'GET', kernelPath: '/v1/mcp/server/', anonymous: true,
+    query: (req) => {
+      const id = String(req.query?.id || '').trim();
+      if (!/^mcp:[a-z0-9-]{1,64}$/.test(id)) throw new Error('name a server');
+      const client = String(req.query?.client || '').trim();
+      return encodeURIComponent(id) + (/^[a-z-]{1,32}$/.test(client) ? `?client=${client}` : '');
+    },
+    unavailable: 'The MCP registry is temporarily unavailable',
+  },
   attend: {
     method: 'POST', kernelPath: '/v1/owner/attend', sameOrigin: true,
     check: (req) => (/^[a-z0-9:_-]{4,90}$/i.test(String(req.body?.eventId || '')) ? null : 'name the event to attend'),
@@ -597,7 +647,11 @@ module.exports = async function handler(req, res) {
 
     const result = route.body
       ? await kernel(route.kernelPath, { method: 'POST', token, body: route.body(req) })
-      : await kernel(route.kernelPath, { token });
+      // A browse route is only useful if its facets survive the hop, so routes
+      // that opt in carry their whitelisted query parameters through to the
+      // Kernel. Whitelisted, not forwarded wholesale: this proxy decides what
+      // reaches the Kernel, never the caller.
+      : await kernel(route.query ? route.kernelPath + route.query(req) : route.kernelPath, { token });
     if (route.refreshCookie && token && result.data?.ok) setOwnerCookie(res, token, req);
     return send(res, result.status, result.data);
   } catch (error) {
