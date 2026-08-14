@@ -1309,7 +1309,12 @@ layers.sort((a, b) => a.d - b.d).forEach(l => l.draw());
       </div>`;
 
   const worldEls = [document.querySelector('.welcome'), document.querySelector('.bento')];
+  // Which pane is on screen right now. Panes are built from the session, and
+  // the session arrives after the first paint, so whichever pane rendered
+  // first has to be told when the answer finally comes back.
+  let activeTab = 'world';
   function activate(tab) {
+    activeTab = tab;
     document.querySelectorAll('#tabs .tab').forEach(t => t.classList.toggle('on', t.dataset.tab === tab));
     const isWorld = tab === 'world';
     worldEls.forEach(e => e.style.display = isWorld ? '' : (e.classList.contains('bento') ? 'none' : 'none'));
@@ -2093,6 +2098,12 @@ layers.sort((a, b) => a.d - b.d).forEach(l => l.draw());
 
   async function loadOwnerCenter(showModal = false) {
     await Promise.all([loadApprovals(false), loadNotifications(), loadMail(false)]);
+    // A pane drawn before the session landed is still showing the spectator
+    // view of a connected owner. The Skills pane was the visible case: reload
+    // on that tab, or open it by deep link, and it kept saying "connect your
+    // agent" underneath a nav bar naming the citizen. Re-run whichever pane is
+    // on screen now that we know who this is.
+    if (activeTab && activeTab !== 'world') activate(activeTab);
     if (showModal) {
       open('mApprovals');
       await fetch('/api/notifications', { method:'POST', headers:{ 'Content-Type':'application/json', Accept:'application/json' }, body:'{}' });
