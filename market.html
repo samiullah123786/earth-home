@@ -108,6 +108,13 @@
   .card .name { font:800 15px var(--mono); overflow-wrap:anywhere; }
   .card .one-liner { color:var(--shade); font-size:13px; margin:8px 0 12px; min-height:40px; line-height:1.5; }
   .card .foot { display:flex; align-items:center; gap:12px; flex-wrap:wrap; font:700 11.5px var(--mono); color:var(--shade); }
+  /* MCP cards carry a capability row: the disclosure a directory of runnable
+     programs owes its reader, in the same stamped-ink grammar as everything. */
+  .caps { display:flex; gap:5px; flex-wrap:wrap; margin:0 0 10px; }
+  .cap-chip { font:800 9.5px var(--mono); letter-spacing:.7px; border:2px solid var(--ink);
+              background:#FFF3D6; padding:2px 6px; white-space:nowrap; }
+  .kind-tag { font:800 10px var(--mono); letter-spacing:.8px; border:2px solid var(--ink);
+              background:#DDE7F7; padding:2px 7px; }
   .rank-tag { margin-left:auto; font:800 10px var(--mono); letter-spacing:1px; color:var(--ink);
               border:2px solid var(--ink); padding:2px 7px; background:var(--cream); }
 
@@ -133,6 +140,11 @@
   .detail-head { display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:4px; }
   .detail-head h1 { font:800 26px var(--mono); letter-spacing:-.5px; overflow-wrap:anywhere; }
   .detail-sub { font:700 11px var(--mono); color:var(--shade); margin-bottom:18px; overflow-wrap:anywhere; }
+  .detail-body { font-size:14px; line-height:1.65; color:var(--ink); margin:0 0 14px; }
+  /* Provenance, said plainly rather than hidden in a tooltip: an indexed row
+     is not a vouched-for row, and the page has to admit which it is. */
+  .detail-note { font:700 12px/1.6 var(--mono); color:var(--shade); background:var(--cream);
+                 border:2px dashed var(--ink); padding:10px 12px; margin:0 0 14px; }
   .cols { display:grid; grid-template-columns:1.55fr 1fr; gap:16px; align-items:start; }
   @media (max-width:880px) { .cols { grid-template-columns:1fr; } }
   .pane-card { background:var(--paper); border:3px solid var(--ink); box-shadow:4px 4px 0 var(--ink);
@@ -260,6 +272,11 @@
 
   <div class="toolbar" id="toolbar">
     <input id="search" type="search" placeholder="SEARCH SKILLS AND SERVERS…" aria-label="Search listings">
+    <div class="sort-tabs" role="group" aria-label="Kind of listing">
+      <button type="button" class="sort-tab on" data-kind="all">ALL</button>
+      <button type="button" class="sort-tab" data-kind="skill">SKILLS</button>
+      <button type="button" class="sort-tab" data-kind="mcp">MCP SERVERS</button>
+    </div>
     <div class="sort-tabs" role="group" aria-label="Sort listings">
       <button type="button" class="sort-tab on" data-sort="top">TOP RANKED</button>
       <button type="button" class="sort-tab" data-sort="new">NEWEST</button>
@@ -320,6 +337,34 @@
   const searchBox = document.getElementById('search');
   const agentSection = document.getElementById('agent-section');
   let listings = [];
+  let mcpServers = [];
+
+  /** The pool the grid and the chips both read, given the chosen kind. */
+  function shelfFor(kind) {
+    if (kind === 'skill') return listings;
+    if (kind === 'mcp') return mcpServers;
+    return [...listings, ...mcpServers];
+  }
+
+  /**
+   * What a server reaches for, in words rather than jargon.
+   *
+   * This is the one thing a directory of runnable programs owes a reader, and
+   * the badge is generated from the manifest, so a listing cannot flatter
+   * itself into looking harmless.
+   */
+  const MCP_BADGE = {
+    network: ['NETWORK', 'reaches the internet'],
+    subprocess: ['RUNS LOCALLY', 'starts a program on your machine'],
+    container: ['DOCKER', 'runs inside a container'],
+    credentials: ['NEEDS A KEY', 'you must supply a secret'],
+    filesystem: ['FILES', 'reads paths you point it at'],
+    'read-only': ['READ ONLY', 'every tool only reads'],
+  };
+  const capChips = (capabilities) => (capabilities || []).map((capability) => {
+    const [label, why] = MCP_BADGE[capability] || [capability.toUpperCase(), capability];
+    return `<span class="cap-chip" title="${esc(why)}">${esc(label)}</span>`;
+  }).join('');
 
   /* Listing names and summaries are depositor-controlled strings. The Kernel
      validates their shape, and this page escapes them anyway - a market about
@@ -372,7 +417,7 @@
   function renderGrid() {
     agentSection.style.display = '';
     const query = searchBox.value.trim().toLowerCase();
-    let rows = listings.filter((row) =>
+    let rows = shelfFor(kindMode).filter((row) =>
       (!query || `${row.name} ${row.oneLiner} ${(row.categories || []).join(' ')} ${row.author || ''}`.toLowerCase().includes(query))
       && (!activeCategory || (row.categories || []).includes(activeCategory))
       && (sortMode !== 'verified' || row.verified));
@@ -385,19 +430,31 @@
         : 'THE KERNEL IS UNREACHABLE, OR THE MARKET IS EMPTY. BOTH ARE TEMPORARY.'}</div>`;
       return;
     }
-    view.innerHTML = `<h2 class="sect"><span class="lead">■</span> THE VAULT'S PUBLIC FACE · RANKED BY ADOPTION ONLY</h2>
+    const heading = kindMode === 'mcp'
+      ? 'MCP SERVERS · TOOLS YOUR AGENT CAN RUN'
+      : kindMode === 'skill'
+        ? "AGENT SKILLS · THE VAULT'S PUBLIC FACE"
+        : "SKILLS AND MCP SERVERS · RANKED BY ADOPTION ONLY";
+    view.innerHTML = `<h2 class="sect"><span class="lead">■</span> ${heading}</h2>
     <div class="grid">${rows.map((row) => `
       <button class="card" data-id="${esc(row.id)}" aria-label="Open ${esc(row.name)}">
         <div class="top">
           <span class="name">${esc(row.name)}</span>
           ${row.forkOf ? '<span class="fork-chip" title="Forked: ancestors earn royalties on every sale">⑂ FORK</span>' : ''}
-          <span style="margin-left:auto"></span>${badge(row.verified)}
+          <span style="margin-left:auto"></span>${row.kind === 'mcp'
+            ? '<span class="cap-chip" title="Indexed from a public catalogue. Earth did not scan it and does not vouch for it.">INDEXED</span>'
+            : badge(row.verified)}
         </div>
         <div class="one-liner">${esc(row.oneLiner) || '<i>no description offered</i>'}</div>
+        ${row.kind === 'mcp' ? `<div class="caps">${capChips(row.capabilities)}</div>` : ''}
         <div class="foot">
-          ${price(row.price)}
-          <span title="Pulls: paid acquisitions whose bytes were fetched">⬇ ${row.pulls}</span>
-          <span class="rank-tag" title="Adoption rank: pulls + 2 × verified installs">RANK ${row.rank}</span>
+          ${row.kind === 'mcp'
+            ? `<span class="kind-tag">MCP · ${esc(row.transport || 'stdio')}</span>
+               <span title="Tools this server adds to your agent">🔧 ${row.toolCount}</span>
+               <span class="rank-tag" title="Installs recorded by Earth">INSTALLS ${row.pulls}</span>`
+            : `${price(row.price)}
+               <span title="Pulls: paid acquisitions whose bytes were fetched">⬇ ${row.pulls}</span>
+               <span class="rank-tag" title="Adoption rank: pulls + 2 × verified installs">RANK ${row.rank}</span>`}
         </div>
         ${(row.categories || []).length || row.author ? `<div class="author-line">${(row.categories || []).slice(0, 3).map((cat) => `<span class="cat-mini">${esc(cat)}</span>`).join('')}${row.author ? ` by ${esc(row.author)}` : ''}</div>` : ''}
       </button>`).join('')}</div>`;
@@ -540,20 +597,92 @@
   async function route() {
     const match = /^#\/l\/(.+)$/.exec(location.hash);
     if (match) {
-      const detail = await api(`/api/market?id=${encodeURIComponent(decodeURIComponent(match[1]))}`);
-      if (detail.ok) { renderDetail(detail); window.scrollTo(0, 0); return; }
+      const id = decodeURIComponent(match[1]);
+      // An MCP server carries its own detail shape - tools, required config,
+      // and a config snippet per client - so it gets its own page rather than
+      // being squeezed into the shape of a skill listing.
+      if (id.startsWith('mcp:')) {
+        const found = await api(`/api/mcp-server?id=${encodeURIComponent(id)}`);
+        if (found.ok && found.server) { renderMcpDetail(found.server); window.scrollTo(0, 0); return; }
+      } else {
+        const detail = await api(`/api/market?id=${encodeURIComponent(id)}`);
+        if (detail.ok) { renderDetail(detail); window.scrollTo(0, 0); return; }
+      }
     }
     renderGrid();
   }
 
+  /**
+   * One MCP server, in full.
+   *
+   * The install block is the reason this page exists. Every client configures
+   * MCP differently, so one tab per client, each naming the file the config
+   * belongs in - and the snippet comes from the Kernel, generated from what
+   * the server declares, so it cannot drift from the listing above it.
+   */
+  function renderMcpDetail(server) {
+    agentSection.style.display = 'none';
+    const tools = (server.tools || []).slice(0, 60);
+    const needed = server.userConfig || [];
+    view.innerHTML = `
+      <a class="back" href="#" onclick="location.hash='';return false">← BACK TO THE MARKET</a>
+      <div class="detail">
+        <div class="detail-head">
+          <h1>${esc(server.displayName || server.name)}</h1>
+          <span class="kind-tag">MCP SERVER</span>
+        </div>
+        <div class="detail-sub">${esc(server.serverId)} · ${esc(server.transport)} · ${esc(server.runtime)}
+          · v${esc(server.version)} · by ${esc(server.authorName)}${server.license ? ` · ${esc(server.license)}` : ''}</div>
+        <p class="detail-body">${esc(server.description)}</p>
+        <div class="caps">${capChips(server.capabilities)}</div>
+        ${server.safetyNote ? `<p class="detail-note">${esc(server.safetyNote)}</p>` : ''}
+        ${server.repository ? `<p class="detail-body"><b>Source</b> ·
+          <a href="${esc(server.repository)}" target="_blank" rel="noopener noreferrer">${esc(server.repository)}</a></p>` : ''}
+        ${tools.length ? `<h2 class="sect"><span class="lead">■</span> TOOLS IT ADDS (${tools.length})</h2>
+          <div class="caps">${tools.map((tool) => `<span class="cap-chip">${esc(tool.name)}</span>`).join('')}</div>` : ''}
+        ${needed.length ? `<h2 class="sect"><span class="lead">■</span> YOU WILL NEED TO SUPPLY</h2>
+          <div class="caps">${needed.map((field) =>
+            `<span class="cap-chip">${esc(field.title)}${field.sensitive ? ' · SECRET' : ''}</span>`).join('')}</div>` : ''}
+        <h2 class="sect"><span class="lead">■</span> INSTALL IT</h2>
+        <div class="sort-tabs" id="mcpClients" role="group" aria-label="Client"></div>
+        <p class="detail-body" id="mcpPath"></p>
+        <pre class="term" id="mcpSnippet" style="white-space:pre-wrap;overflow-x:auto"></pre>
+        <button type="button" class="submit-cta" id="mcpCopy">COPY CONFIG</button>
+      </div>`;
+    const tabs = document.getElementById('mcpClients');
+    const show = (entry) => {
+      for (const child of tabs.children) child.classList.toggle('on', child.dataset.client === entry.client.id);
+      document.getElementById('mcpPath').innerHTML = `<b>Put it in</b> <code>${esc(entry.configPath)}</code>${
+        entry.unsupported ? ` — <b>${esc(entry.unsupported)}</b>` : ''}`;
+      document.getElementById('mcpSnippet').textContent = entry.snippet;
+      document.getElementById('mcpCopy').onclick = async () => {
+        try { await navigator.clipboard.writeText(entry.snippet); }
+        catch { /* the text is on screen either way */ }
+      };
+    };
+    for (const entry of server.install || []) {
+      const tab = document.createElement('button');
+      tab.type = 'button'; tab.className = 'sort-tab'; tab.dataset.client = entry.client.id;
+      tab.textContent = entry.client.name.toUpperCase();
+      tab.addEventListener('click', () => show(entry));
+      tabs.append(tab);
+    }
+    if (server.install?.length) show(server.install[0]);
+  }
+
   let sortMode = 'top';
   let activeCategory = '';
+  // Skills and MCP servers are genuinely different things - one is knowledge an
+  // agent reads, the other a program that hands it tools - so they are filtered
+  // apart rather than blended into one undifferentiated wall of cards.
+  let kindMode = 'all';
 
   function renderChips() {
     const box = document.getElementById('catChips');
     if (!box) return;
     const counts = new Map();
-    for (const row of listings) for (const cat of row.categories || []) counts.set(cat, (counts.get(cat) || 0) + 1);
+    const pool = shelfFor(kindMode);
+    for (const row of pool) for (const cat of row.categories || []) counts.set(cat, (counts.get(cat) || 0) + 1);
     if (!counts.size) { box.replaceChildren(); return; }
     const chip = (label, value) => {
       const button = document.createElement('button');
@@ -562,7 +691,7 @@
       button.addEventListener('click', () => { activeCategory = activeCategory === value ? '' : value; renderChips(); renderGrid(); });
       return button;
     };
-    box.replaceChildren(chip(`ALL (${listings.length})`, ''),
+    box.replaceChildren(chip(`ALL (${pool.length})`, ''),
       ...[...counts.entries()].sort((a, b) => b[1] - a[1]).map(([cat, count]) => chip(`${cat.toUpperCase()} (${count})`, cat)));
   }
 
@@ -577,14 +706,42 @@
       const data = await api('/api/market?limit=50');
       listings = data.ok ? data.listings : [];
     }
+    // MCP servers live in their own registry and carry their own metadata, so
+    // they are fetched separately and normalised onto the card shape the grid
+    // already speaks. Failing to read them must never blank the skills.
+    try {
+      const registry = await api('/api/mcp-servers?sort=installs&limit=120');
+      if (registry.ok && Array.isArray(registry.servers)) {
+        mcpServers = registry.servers.map((server) => ({
+          id: server.serverId,
+          kind: 'mcp',
+          name: server.displayName || server.name,
+          oneLiner: server.description,
+          categories: [server.category],
+          author: server.authorName,
+          verified: false,
+          price: 0,
+          pulls: server.installCount || 0,
+          rank: server.installCount || 0,
+          createdAt: server.updatedAt,
+          capabilities: server.capabilities || [],
+          toolCount: server.toolCount || 0,
+          transport: server.transport,
+        }));
+      }
+    } catch { mcpServers = []; }
     renderStats();
     renderChips();
     await route();
   }
 
   document.querySelectorAll('.sort-tab').forEach((tab) => tab.addEventListener('click', () => {
-    document.querySelectorAll('.sort-tab').forEach((other) => other.classList.toggle('on', other === tab));
-    sortMode = tab.dataset.sort;
+    // Two groups share the class; each one only clears its own siblings.
+    const group = tab.dataset.kind ? 'kind' : 'sort';
+    document.querySelectorAll(`.sort-tab[data-${group}]`)
+      .forEach((other) => other.classList.toggle('on', other === tab));
+    if (group === 'kind') { kindMode = tab.dataset.kind; activeCategory = ''; renderChips(); }
+    else sortMode = tab.dataset.sort;
     if (!location.hash) renderGrid();
   }));
   // The modal's markup sits after this script, so bindings are delegated -

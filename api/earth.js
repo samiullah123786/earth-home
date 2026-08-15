@@ -106,6 +106,14 @@ const ROUTES = {
   },
   approvals: { method: 'GET', kernelPath: '/v1/owner/approvals', anonymousOk: true, authWhy: 'not owner-bound', unavailable: 'Earth Kernel is temporarily unavailable' },
   skills: { method: 'GET', kernelPath: '/v1/owner/skills', unavailable: 'Earth Kernel is temporarily unavailable' },
+  // A citizen's own shelf, and the way back off it.
+  listings: { method: 'GET', kernelPath: '/v1/owner/listings', unavailable: 'Earth Kernel is temporarily unavailable' },
+  withdraw: {
+    method: 'POST', kernelPath: '/v1/owner/withdraw', sameOrigin: true,
+    check: (req) => (/^[A-Za-z0-9:_.-]{3,120}$/.test(String(req.body?.listingId || '')) ? null : 'name the listing to withdraw'),
+    body: (req) => ({ listingId: req.body.listingId, reason: req.body.reason }),
+    failWhy: 'withdrawal refused',
+  },
   wallet: { method: 'GET', kernelPath: '/v1/owner/wallet', unavailable: 'Earth Kernel is temporarily unavailable' },
 
   approval: {

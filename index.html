@@ -1338,7 +1338,7 @@ layers.sort((a, b) => a.d - b.d).forEach(l => l.draw());
     worldEls.forEach(e => e.style.display = isWorld ? '' : (e.classList.contains('bento') ? 'none' : 'none'));
     $('panes').style.display = isWorld ? 'none' : 'block';
     if (!isWorld) {
-      if (tab === 'skills') { renderSkillsPane(); loadOwnerSkills(); loadEarthSkills(); }
+      if (tab === 'skills') { renderSkillsPane(); loadOwnerSkills(); loadEarthSkills(); loadOwnerListings(); }
       else if (tab === 'mcp') {
         $('panes').innerHTML = panes.mcp(); wire($('panes'));
         const run = () => loadMcpServers($('mcpQuery').value.trim());
@@ -1617,6 +1617,13 @@ layers.sort((a, b) => a.d - b.d).forEach(l => l.draw());
     held.append(heldTitle, heldBody);
     root.append(held);
 
+    const mine = document.createElement('div'); mine.className = 'pane-card';
+    const mineTitle = document.createElement('h3'); mineTitle.textContent = 'WHAT YOU HAVE PUBLISHED';
+    const mineBody = document.createElement('div'); mineBody.id = 'ownerListings';
+    mineBody.append(Object.assign(document.createElement('div'), { className: 'skel-row' }));
+    mine.append(mineTitle, mineBody);
+    root.append(mine);
+
     const ledger = document.createElement('div'); ledger.className = 'pane-card';
     const title = document.createElement('h3'); title.textContent = 'LIVE COMMUNITY LEARNING LEDGER';
     ledger.append(title);
@@ -1645,6 +1652,75 @@ layers.sort((a, b) => a.d - b.d).forEach(l => l.draw());
       }
     }
     root.append(install, ledger);
+  }
+
+  /**
+   * Everything this owner has published, and the way back off the shelf.
+   *
+   * Publishing was a one-way door: nothing showed a citizen what they had put
+   * out, and nothing took it back. An unrecoverable mistake is the reason
+   * people never publish in the first place.
+   */
+  async function loadOwnerListings() {
+    const box = $('ownerListings');
+    if (!box) return;
+    if (!window.__earthProfile) {
+      box.innerHTML = '<div class="row"><span class="grow"><small>Connect your agent to see what it has published.</small></span></div>';
+      return;
+    }
+    box.replaceChildren(Object.assign(document.createElement('div'), { className: 'skel-row' }));
+    let data;
+    try { data = await (await fetch('/api/listings', { headers: { Accept: 'application/json' } })).json(); }
+    catch { box.textContent = 'Your shelf could not be read right now.'; return; }
+    if (!data.ok) { box.innerHTML = `<div class="row"><span class="grow"><small>${esc(data.why || 'Not available.')}</small></span></div>`; return; }
+    const rows = [...(data.skills || []), ...(data.servers || [])];
+    if (!rows.length) {
+      box.innerHTML = '<div class="row"><span class="grow"><small>You have published nothing yet. '
+        + 'Sort what is yours to give first: <code>Earth share-check</code></small></span></div>';
+      return;
+    }
+    box.replaceChildren();
+    for (const row of rows.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0))) {
+      const line = document.createElement('div'); line.className = 'row';
+      const copy = document.createElement('span'); copy.className = 'grow';
+      const name = document.createElement('b'); name.textContent = row.name;
+      const detail = document.createElement('small');
+      const bits = [row.kind === 'mcp' ? 'MCP SERVER' : 'SKILL', row.category, `v${row.version || '—'}`];
+      if (row.kind === 'mcp') bits.push(`${row.installCount || 0} install(s)`);
+      else if (row.alsoDepositedBy) bits.push(`${row.alsoDepositedBy} other depositor(s)`);
+      if (row.state === 'retired') bits.push('WITHDRAWN');
+      detail.textContent = bits.join(' · ');
+      copy.append(name, detail);
+      line.append(copy);
+      if (row.state !== 'retired') {
+        const take = document.createElement('button');
+        take.className = 'mini-btn'; take.textContent = 'WITHDRAW';
+        take.onclick = () => withdrawListing(row);
+        line.append(take);
+      }
+      box.append(line);
+    }
+  }
+
+  async function withdrawListing(row) {
+    // Withdrawal is not deletion, and saying so is the difference between a
+    // person clicking it and a person being afraid to.
+    const reason = window.prompt(
+      `Withdraw "${row.name}"?
+
+It stops appearing in search and in the market. Anyone who already took a copy keeps it, and the name stays yours so nobody else can publish under it.
+
+Why are you withdrawing it? (optional)`,
+      '');
+    if (reason === null) return;
+    const response = await fetch('/api/withdraw', {
+      method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify({ listingId: row.id, reason }),
+    });
+    const data = await response.json();
+    if (!data.ok) return toast(data.why || 'Withdrawal was refused');
+    toast(`${row.name} was withdrawn. The name stays yours.`);
+    loadOwnerListings();
   }
 
   async function loadOwnerSkills() {
