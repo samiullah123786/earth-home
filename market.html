@@ -98,6 +98,50 @@
   h2.sect { font:800 12px var(--mono); letter-spacing:2px; text-transform:uppercase; margin:26px 0 12px; }
   h2.sect .lead { color:var(--rust); }
 
+  /* ── Shelves: the landing page is rows, not a wall ──
+     Each row answers one question a visitor actually has, carries at most six
+     cards, and ends in a link that opens the full filtered grid. The section
+     header is the same stamped-ink heading used everywhere else, with the
+     "see the rest" link riding the right edge of the same line. */
+  .shelf { margin-bottom: 30px; }
+  .shelf-head { display:flex; align-items:baseline; gap:14px; flex-wrap:wrap; margin:26px 0 4px; }
+  .shelf-head h2.sect { margin:0; }
+  .shelf-why { font:600 12px/1.5 var(--mono); color:var(--shade); margin:0 0 12px; }
+  .shelf-more { margin-left:auto; font:800 11px var(--mono); letter-spacing:1.2px; color:var(--ink);
+                background:none; border:2.5px solid var(--ink); padding:5px 11px; white-space:nowrap; }
+  .shelf-more:hover { background:#BFD58A; box-shadow:3px 3px 0 var(--ink); transform:translate(-1px,-1px); }
+  .shelf .grid { grid-template-columns:repeat(auto-fill, minmax(300px, 1fr)); }
+
+  /* The category board: a directory should show its own shape before it shows
+     its contents, so the counts are the point and are never rounded. */
+  .cat-board { display:grid; grid-template-columns:repeat(auto-fill, minmax(168px, 1fr)); gap:11px; }
+  .cat-tile { text-align:left; background:var(--paper); border:3px solid var(--ink); box-shadow:3px 3px 0 var(--ink);
+              padding:11px 13px; font-family:inherit; color:var(--ink); }
+  .cat-tile:hover { transform:translate(-2px,-2px); box-shadow:5px 5px 0 var(--ink); }
+  .cat-tile b { display:block; font:800 13px var(--mono); letter-spacing:.4px; text-transform:uppercase; }
+  .cat-tile span { display:block; font:700 10.5px var(--mono); color:var(--shade); margin-top:3px; }
+
+  /* The connect band: the one command that wires Earth into every AI client.
+     Ink-on-dark like the ticker, because it speaks with the machine's voice. */
+  .connect-band { background:var(--ink); color:var(--cream); border:3px solid var(--ink);
+                  box-shadow:6px 6px 0 rgba(30,30,30,.35); padding:15px 18px; margin-bottom:22px;
+                  display:flex; gap:18px; align-items:center; flex-wrap:wrap; }
+  .connect-band .said { flex:1; min-width:250px; }
+  .connect-band b { display:block; font:800 13px var(--mono); letter-spacing:1.4px; color:#8FE3A9; margin-bottom:4px; }
+  .connect-band p { font-size:12.5px; line-height:1.6; opacity:.86; }
+  .connect-band code { display:block; font:700 13px var(--mono); background:#2A2A2A; border:2px solid #4A4A4A;
+                       padding:9px 13px; margin-top:9px; color:#FDF6EC; overflow-x:auto; }
+  .connect-copy { font:800 11px var(--mono); letter-spacing:1.2px; background:#BFD58A; color:var(--ink);
+                  border:2.5px solid #BFD58A; padding:8px 14px; white-space:nowrap; }
+  .connect-copy:hover { background:#D5E8A8; border-color:#D5E8A8; }
+
+  /* Which clients this all works with. Not cards - these are not things you
+     install, they are the software you already have. */
+  .client-row { display:flex; gap:9px; flex-wrap:wrap; }
+  .client-pill { font:700 11.5px var(--mono); border:2.5px solid var(--ink); background:var(--paper);
+                 padding:7px 12px; box-shadow:2px 2px 0 var(--ink); }
+  .client-pill i { font-style:normal; color:var(--shade); }
+
   /* ── The listing grid ── */
   .grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(330px, 1fr)); gap:16px; }
   .card { position:relative; text-align:left; background:var(--paper); border:3px solid var(--ink);
@@ -270,6 +314,16 @@
 
   <div class="tiles" id="tiles" aria-label="Market statistics"></div>
 
+  <div class="connect-band">
+    <div class="said">
+      <b>■ CONNECT YOUR AGENT</b>
+      <p>One command wires Earth into every AI client on your machine — Claude Code, Claude Desktop,
+        Cursor, Windsurf, Codex, VS Code, Gemini CLI. Your agent can then search this market itself.
+        It prints the plan before it writes anything, and adds only read-only tools.</p>
+      <code id="connectLine">npx agentsearth connect</code>
+    </div>
+    <button type="button" class="connect-copy" id="connectCopy">COPY</button>
+  </div>
   <div class="toolbar" id="toolbar">
     <input id="search" type="search" placeholder="SEARCH SKILLS AND SERVERS…" aria-label="Search listings">
     <div class="sort-tabs" role="group" aria-label="Kind of listing">
@@ -414,29 +468,9 @@
       + `<span class="amber">every fork pays its ancestors 10 / 5 / 2.5%</span>`;
   }
 
-  function renderGrid() {
-    agentSection.style.display = '';
-    const query = searchBox.value.trim().toLowerCase();
-    let rows = shelfFor(kindMode).filter((row) =>
-      (!query || `${row.name} ${row.oneLiner} ${(row.categories || []).join(' ')} ${row.author || ''}`.toLowerCase().includes(query))
-      && (!activeCategory || (row.categories || []).includes(activeCategory))
-      && (sortMode !== 'verified' || row.verified));
-    rows = rows.slice().sort((left, right) => sortMode === 'new'
-      ? (right.createdAt || 0) - (left.createdAt || 0)
-      : right.rank - left.rank || left.id.localeCompare(right.id));
-    if (!rows.length) {
-      view.innerHTML = `<div class="void-card">${query
-        ? 'NOTHING MATCHES. THE NEXT DEPOSIT COULD.'
-        : 'THE KERNEL IS UNREACHABLE, OR THE MARKET IS EMPTY. BOTH ARE TEMPORARY.'}</div>`;
-      return;
-    }
-    const heading = kindMode === 'mcp'
-      ? 'MCP SERVERS · TOOLS YOUR AGENT CAN RUN'
-      : kindMode === 'skill'
-        ? "AGENT SKILLS · THE VAULT'S PUBLIC FACE"
-        : "SKILLS AND MCP SERVERS · RANKED BY ADOPTION ONLY";
-    view.innerHTML = `<h2 class="sect"><span class="lead">■</span> ${heading}</h2>
-    <div class="grid">${rows.map((row) => `
+  /* One card, drawn the same way whether it sits on a shelf or in the full
+     grid. Extracting it is what makes the two views impossible to drift. */
+  const cardHtml = (row) => `
       <button class="card" data-id="${esc(row.id)}" aria-label="Open ${esc(row.name)}">
         <div class="top">
           <span class="name">${esc(row.name)}</span>
@@ -450,14 +484,215 @@
         <div class="foot">
           ${row.kind === 'mcp'
             ? `<span class="kind-tag">MCP · ${esc(row.transport || 'stdio')}</span>
-               <span title="Tools this server adds to your agent">🔧 ${row.toolCount}</span>
+               <span title="${row.toolCount >= 40
+                 ? 'This server declares at least 40 tools; the catalogue recorded the first 40.'
+                 : 'Tools this server adds to your agent'}">🔧 ${row.toolCount}${row.toolCount >= 40 ? '+' : ''}</span>
                <span class="rank-tag" title="Installs recorded by Earth">INSTALLS ${row.pulls}</span>`
             : `${price(row.price)}
                <span title="Pulls: paid acquisitions whose bytes were fetched">⬇ ${row.pulls}</span>
                <span class="rank-tag" title="Adoption rank: pulls + 2 × verified installs">RANK ${row.rank}</span>`}
         </div>
         ${(row.categories || []).length || row.author ? `<div class="author-line">${(row.categories || []).slice(0, 3).map((cat) => `<span class="cat-mini">${esc(cat)}</span>`).join('')}${row.author ? ` by ${esc(row.author)}` : ''}</div>` : ''}
-      </button>`).join('')}</div>`;
+      </button>`;
+
+
+  /* ── Shelves ───────────────────────────────────────────────────────────────
+     The landing page. A visitor arriving cold cannot use a wall of two hundred
+     cards; they can use six rows that each answer one question. Every row ends
+     in a link that opens the full grid already filtered, so the wall is still
+     one click away for anyone who wants it - it is just no longer the first
+     thing they meet.
+
+     A row with nothing in it is dropped rather than drawn empty: an honest
+     directory shows what it has, not placeholders for what it wishes it had. */
+
+  const shelfCard = (rows, limit = 6) => `<div class="grid">${rows.slice(0, limit).map(cardHtml).join('')}</div>`;
+
+  function shelfBlock({ title, why, rows, more, moreLabel = 'SEE ALL' }) {
+    if (!rows.length) return '';
+    return `<section class="shelf">
+      <div class="shelf-head">
+        <h2 class="sect"><span class="lead">■</span> ${title}</h2>
+        ${more ? `<button type="button" class="shelf-more" data-more="${more}">${moreLabel} (${rows.length}) →</button>` : ''}
+      </div>
+      ${why ? `<p class="shelf-why">${why}</p>` : ''}
+      ${shelfCard(rows)}
+    </section>`;
+  }
+
+  function renderShelves() {
+    const all = shelfFor('all');
+    const skills = all.filter((row) => row.kind !== 'mcp');
+    const servers = all.filter((row) => row.kind === 'mcp');
+    // Ties break by name. Arbitrary, but stable and explicable - unlike
+    // falling through to whatever order the API happened to answer in, which
+    // is how a shelf ends up quietly sorted Z to A and labelled "most popular".
+    const byName = (left, right) => String(left.name).localeCompare(String(right.name));
+    const byRank = (list) => [...list].sort((left, right) => right.rank - left.rank || byName(left, right));
+    const byNew = (list) => [...list].sort((left, right) => (right.createdAt || 0) - (left.createdAt || 0) || byName(left, right));
+    const byTools = (list) => [...list].sort((left, right) => (right.toolCount || 0) - (left.toolCount || 0) || byName(left, right));
+    // The MCP catalogue arrived as a bulk import, so a hundred servers share
+    // three timestamps. Straight newest-first buries every skill under them;
+    // taking from each side in turn shows what is actually new on both.
+    const interleave = (left, right) => {
+      const mixed = [];
+      for (let index = 0; index < Math.max(left.length, right.length); index++) {
+        if (left[index]) mixed.push(left[index]);
+        if (right[index]) mixed.push(right[index]);
+      }
+      return mixed;
+    };
+    // Nothing has been installed through Earth yet, and tool counts came in
+    // truncated at forty, so twenty-three servers tie at the ceiling. Neither
+    // number can order this row. Rather than invent a ranking out of ties -
+    // which is exactly what this market exists not to do - it shows the
+    // best-stocked server from each of the busiest categories. That is a real
+    // fact about the catalogue, and it tells a visitor what Earth covers.
+    const anyAdoption = servers.some((row) => row.pulls > 0);
+    const oneFromEachCorner = (list) => {
+      const bins = new Map();
+      for (const row of byTools(list)) {
+        const corner = (row.categories || [])[0] || 'general';
+        if (!bins.has(corner)) bins.set(corner, row);
+      }
+      return [...bins.entries()]
+        .sort((left, right) => cornerSize(right[0], list) - cornerSize(left[0], list))
+        .map(([, row]) => row);
+    };
+    const cornerSize = (corner, list) => list.filter((row) => (row.categories || [])[0] === corner).length;
+
+    if (!all.length) {
+      view.innerHTML = '<div class="void-card">THE KERNEL IS UNREACHABLE, OR THE MARKET IS EMPTY. BOTH ARE TEMPORARY.</div>';
+      return;
+    }
+
+    const counts = new Map();
+    for (const row of all) for (const cat of row.categories || []) counts.set(cat, (counts.get(cat) || 0) + 1);
+    const board = [...counts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 12);
+
+    view.innerHTML = [
+      shelfBlock({
+        title: 'EARTH VERIFIED',
+        why: 'The Kernel read these bytes, found nothing that could act on your machine, and signed the verdict. '
+           + 'Checkable offline against GET /v1/verify — no other registry offers this.',
+        rows: byRank(skills.filter((row) => row.verified)),
+        more: 'verified',
+      }),
+      shelfBlock({
+        title: anyAdoption ? 'MOST ADOPTED MCP SERVERS' : 'MCP SERVERS · ONE FROM EACH CORNER',
+        why: anyAdoption
+          ? 'Ranked by installs Earth actually recorded. There is no paid placement to buy.'
+          : 'Nothing has been installed through Earth yet, and this market will not invent a ranking '
+            + 'to fill the gap. So: the best-stocked server from each of the busiest categories. '
+            + 'The moment real installs exist, this row ranks by them.',
+        rows: anyAdoption ? byRank(servers) : oneFromEachCorner(servers),
+        more: 'mcp',
+        moreLabel: 'ALL SERVERS',
+      }),
+      shelfBlock({
+        title: 'NEWEST ARRIVALS',
+        why: 'Listed the moment they exist, badge-labelled rather than hidden while a queue catches up. '
+           + 'Newest skills and newest servers, taken in turn.',
+        rows: interleave(byNew(skills), byNew(servers)),
+        more: 'new',
+      }),
+      shelfBlock({
+        title: 'FREE TO PULL',
+        why: 'Knowledge its author priced at nothing. Pulling still costs you no tokens.',
+        rows: byRank(skills.filter((row) => !row.price)),
+        more: 'free',
+      }),
+      board.length ? `<section class="shelf">
+        <div class="shelf-head"><h2 class="sect"><span class="lead">■</span> BROWSE BY CATEGORY</h2></div>
+        <p class="shelf-why">What Earth is actually stocked in, with real counts.</p>
+        <div class="cat-board">${board.map(([cat, count]) => `
+          <button type="button" class="cat-tile" data-cat="${esc(cat)}">
+            <b>${esc(cat)}</b><span>${count} listing${count === 1 ? '' : 's'}</span>
+          </button>`).join('')}</div>
+      </section>` : '',
+      clients.length ? `<section class="shelf">
+        <div class="shelf-head"><h2 class="sect"><span class="lead">■</span> WORKS WITH</h2></div>
+        <p class="shelf-why">Every client the installer can write config for. One command wires Earth into all of them.</p>
+        <div class="client-row">${clients.map((client) => `
+          <span class="client-pill">${esc(client.name)} <i>${esc((client.supports || []).join('/'))}</i></span>`).join('')}</div>
+      </section>` : '',
+    ].join('');
+
+    for (const card of view.querySelectorAll('.card')) {
+      card.addEventListener('click', () => { location.hash = `#/l/${encodeURIComponent(card.dataset.id)}`; });
+    }
+    for (const tile of view.querySelectorAll('.cat-tile')) {
+      tile.addEventListener('click', () => { activeCategory = tile.dataset.cat; renderChips(); renderGrid(); window.scrollTo(0, 0); });
+    }
+    for (const button of view.querySelectorAll('.shelf-more')) {
+      button.addEventListener('click', () => { openShelf(button.dataset.more); });
+    }
+  }
+
+  /* Opening a shelf sets the same filters the tabs set, so the full grid a
+     reader lands on is one they could have reached by hand - and the tabs
+     above it show where they are rather than contradicting the view. */
+  function openShelf(which) {
+    if (which === 'mcp') { kindMode = 'mcp'; sortMode = 'top'; }
+    else if (which === 'verified') { kindMode = 'skill'; sortMode = 'verified'; }
+    else if (which === 'new') { kindMode = 'all'; sortMode = 'new'; }
+    else if (which === 'free') { kindMode = 'skill'; sortMode = 'top'; freeOnly = true; }
+    activeCategory = '';
+    syncTabs();
+    renderChips();
+    renderGrid();
+    window.scrollTo(0, 0);
+  }
+
+  function syncTabs() {
+    for (const tab of document.querySelectorAll('.sort-tab[data-kind]')) tab.classList.toggle('on', tab.dataset.kind === kindMode);
+    for (const tab of document.querySelectorAll('.sort-tab[data-sort]')) tab.classList.toggle('on', tab.dataset.sort === sortMode);
+  }
+
+  function renderGrid() {
+    agentSection.style.display = '';
+    const query = searchBox.value.trim().toLowerCase();
+    // Nothing asked for yet? Then this is the front page, and the front page
+    // is shelves. The wall of cards is an answer to a question, not a greeting.
+    if (!query && !activeCategory && !freeOnly && kindMode === 'all' && sortMode === 'top') {
+      renderShelves();
+      return;
+    }
+    let rows = shelfFor(kindMode).filter((row) =>
+      (!query || `${row.name} ${row.oneLiner} ${(row.categories || []).join(' ')} ${row.author || ''}`.toLowerCase().includes(query))
+      && (!activeCategory || (row.categories || []).includes(activeCategory))
+      && (sortMode !== 'verified' || row.verified)
+      && (!freeOnly || !row.price));
+    rows = rows.slice().sort((left, right) => sortMode === 'new'
+      ? (right.createdAt || 0) - (left.createdAt || 0)
+      : right.rank - left.rank || left.id.localeCompare(right.id));
+    if (!rows.length) {
+      view.innerHTML = `<div class="void-card">${query
+        ? 'NOTHING MATCHES. THE NEXT DEPOSIT COULD.'
+        : 'THE KERNEL IS UNREACHABLE, OR THE MARKET IS EMPTY. BOTH ARE TEMPORARY.'}</div>`;
+      return;
+    }
+    // The heading names the filter that is actually on. It used to claim
+    // "ranked by adoption only" on every view, including ones sorted by date
+    // and ones showing a single category - a strapline standing in for a
+    // description, which left the page saying something untrue about itself.
+    const heading = [
+      activeCategory ? `${esc(activeCategory).toUpperCase()} ·` : '',
+      kindMode === 'mcp' ? 'MCP SERVERS' : kindMode === 'skill' ? 'AGENT SKILLS' : 'SKILLS AND MCP SERVERS',
+      freeOnly ? '· FREE' : '',
+      sortMode === 'verified' ? '· EARTH VERIFIED' : sortMode === 'new' ? '· NEWEST FIRST' : '',
+      query ? `· MATCHING "${esc(searchBox.value.trim()).toUpperCase()}"` : '',
+    ].filter(Boolean).join(' ');
+    view.innerHTML = `<div class="shelf-head">
+      <h2 class="sect"><span class="lead">■</span> ${heading} · ${rows.length}</h2>
+      <button type="button" class="shelf-more" id="clearFilters">← BACK TO THE SHELVES</button>
+    </div>
+    <div class="grid">${rows.map(cardHtml).join('')}</div>`;
+    document.getElementById('clearFilters').addEventListener('click', () => {
+      kindMode = 'all'; sortMode = 'top'; activeCategory = ''; freeOnly = false;
+      searchBox.value = '';
+      syncTabs(); renderChips(); renderGrid(); window.scrollTo(0, 0);
+    });
     for (const card of view.querySelectorAll('.card')) {
       card.addEventListener('click', () => { location.hash = `#/l/${encodeURIComponent(card.dataset.id)}`; });
     }
@@ -644,11 +879,26 @@
           <div class="caps">${needed.map((field) =>
             `<span class="cap-chip">${esc(field.title)}${field.sensitive ? ' · SECRET' : ''}</span>`).join('')}</div>` : ''}
         <h2 class="sect"><span class="lead">■</span> INSTALL IT</h2>
+        <p class="detail-body">One line, and it writes the config for you. It prints what the
+          server will reach for before it changes anything, and never fills a secret in on your behalf.</p>
+        <pre class="term" id="mcpOneLiner">${esc(server.oneLiner || `npx agentsearth install ${server.name}`)}</pre>
+        <button type="button" class="submit-cta" id="mcpCopyLine">COPY COMMAND</button>
+        <h2 class="sect"><span class="lead">■</span> OR PASTE IT YOURSELF</h2>
+        <p class="detail-body">Prefer to see exactly what lands in your config? Pick your client
+          and copy the block. This is the same JSON the command would write.</p>
         <div class="sort-tabs" id="mcpClients" role="group" aria-label="Client"></div>
         <p class="detail-body" id="mcpPath"></p>
         <pre class="term" id="mcpSnippet" style="white-space:pre-wrap;overflow-x:auto"></pre>
         <button type="button" class="submit-cta" id="mcpCopy">COPY CONFIG</button>
       </div>`;
+    const copyLine = document.getElementById('mcpCopyLine');
+    if (copyLine) {
+      copyLine.onclick = async () => {
+        const line = document.getElementById('mcpOneLiner').textContent;
+        try { await navigator.clipboard.writeText(line); copyLine.textContent = 'COPIED'; }
+        catch { /* the command is on screen either way */ }
+      };
+    }
     const tabs = document.getElementById('mcpClients');
     const show = (entry) => {
       for (const child of tabs.children) child.classList.toggle('on', child.dataset.client === entry.client.id);
@@ -672,6 +922,10 @@
 
   let sortMode = 'top';
   let activeCategory = '';
+  // A shelf filter the tabs have no equivalent for, so it lives on its own
+  // rather than being smuggled into sortMode where it would fight the tabs.
+  let freeOnly = false;
+  let clients = [];
   // Skills and MCP servers are genuinely different things - one is knowledge an
   // agent reads, the other a program that hands it tools - so they are filtered
   // apart rather than blended into one undifferentiated wall of cards.
@@ -730,6 +984,10 @@
         }));
       }
     } catch { mcpServers = []; }
+    try {
+      const known = await api('/api/mcp-clients');
+      clients = known.ok && Array.isArray(known.clients) ? known.clients : [];
+    } catch { clients = []; }
     renderStats();
     renderChips();
     await route();
@@ -740,6 +998,7 @@
     const group = tab.dataset.kind ? 'kind' : 'sort';
     document.querySelectorAll(`.sort-tab[data-${group}]`)
       .forEach((other) => other.classList.toggle('on', other === tab));
+    freeOnly = false;
     if (group === 'kind') { kindMode = tab.dataset.kind; activeCategory = ''; renderChips(); }
     else sortMode = tab.dataset.sort;
     if (!location.hash) renderGrid();
@@ -753,6 +1012,14 @@
     if (!bg) return;
     if (target.closest('#openSubmit')) { bg.style.display = 'flex'; return; }
     if (target === bg || target.closest('#submitClose')) bg.style.display = 'none';
+  });
+
+  document.getElementById('connectCopy').addEventListener('click', async (event) => {
+    try {
+      await navigator.clipboard.writeText(document.getElementById('connectLine').textContent);
+      event.target.textContent = 'COPIED';
+      setTimeout(() => { event.target.textContent = 'COPY'; }, 1400);
+    } catch { /* the command is on screen either way */ }
   });
 
   searchBox.addEventListener('input', () => { if (!location.hash) renderGrid(); });
