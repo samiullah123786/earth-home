@@ -573,7 +573,15 @@
     // Never stars. The row says which basis it used rather than leaving a
     // reader to assume the flattering one.
     const anyAdoption = servers.some((row) => row.pulls > 0);
-    const scored = servers.filter((row) => typeof row.maintenanceScore === 'number');
+    // A ranking needs enough measured listings to be a selection rather than
+    // an inventory. Without a GitHub token the health pass creeps along a
+    // repository at a time, and a "BEST KEPT" shelf showing the only three
+    // Earth managed to check would imply it had compared them against the
+    // other hundred and eighty-six. Below this it stays on the honest
+    // fallback and says nothing it cannot back.
+    const ENOUGH_MEASURED = 12;
+    const scoredAll = servers.filter((row) => typeof row.maintenanceScore === 'number');
+    const scored = scoredAll.length >= ENOUGH_MEASURED ? scoredAll : [];
     const byKept = (list) => [...list].sort((left, right) =>
       (right.maintenanceScore ?? -1) - (left.maintenanceScore ?? -1) || byName(left, right));
     const oneFromEachCorner = (list) => {
