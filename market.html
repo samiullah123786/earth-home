@@ -142,6 +142,18 @@
                  padding:7px 12px; box-shadow:2px 2px 0 var(--ink); }
   .client-pill i { font-style:normal; color:var(--shade); }
 
+  /* Maintenance: the one number in this market that is expensive to fake.
+     Popularity is deliberately not encoded as a colour - stars appear on the
+     detail page as a fact and nowhere as a judgement. */
+  .keep { font:800 9.5px var(--mono); letter-spacing:.7px; border:2px solid var(--ink);
+          padding:2px 6px; white-space:nowrap; }
+  .keep-active    { background:#BFD58A; }
+  .keep-maintained{ background:#E4E9C4; }
+  .keep-slowing   { background:#F5D79A; }
+  .keep-stale     { background:#E8C0B0; }
+  .keep-archived  { background:#C9C4BC; text-decoration:line-through; }
+  .keep-unknown   { background:#EFEBE2; color:var(--shade); }
+
   /* ── The listing grid ── */
   .grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(330px, 1fr)); gap:16px; }
   .card { position:relative; text-align:left; background:var(--paper); border:3px solid var(--ink);
@@ -415,6 +427,18 @@
     filesystem: ['FILES', 'reads paths you point it at'],
     'read-only': ['READ ONLY', 'every tool only reads'],
   };
+  /* What Earth knows about whether this is looked after. An unchecked
+     listing says so rather than being scored zero and sorted with the dead. */
+  const KEEP_WORD = {
+    active: 'ACTIVELY KEPT', maintained: 'MAINTAINED', slowing: 'SLOWING',
+    stale: 'STALE', archived: 'ARCHIVED', unknown: 'UNCHECKED',
+  };
+  const keepChip = (row) => {
+    const label = row.maintenance?.label ?? 'unknown';
+    const why = row.maintenance?.why || 'Earth has not checked this repository yet.';
+    return `<span class="keep keep-${esc(label)}" title="${esc(why)}">${KEEP_WORD[label] ?? 'UNCHECKED'}</span>`;
+  };
+
   const capChips = (capabilities) => (capabilities || []).map((capability) => {
     const [label, why] = MCP_BADGE[capability] || [capability.toUpperCase(), capability];
     return `<span class="cap-chip" title="${esc(why)}">${esc(label)}</span>`;
@@ -480,7 +504,7 @@
             : badge(row.verified)}
         </div>
         <div class="one-liner">${esc(row.oneLiner) || '<i>no description offered</i>'}</div>
-        ${row.kind === 'mcp' ? `<div class="caps">${capChips(row.capabilities)}</div>` : ''}
+        ${row.kind === 'mcp' ? `<div class="caps">${keepChip(row)}${capChips(row.capabilities)}</div>` : ''}
         <div class="foot">
           ${row.kind === 'mcp'
             ? `<span class="kind-tag">MCP · ${esc(row.transport || 'stdio')}</span>
@@ -542,13 +566,16 @@
       }
       return mixed;
     };
-    // Nothing has been installed through Earth yet, and tool counts came in
-    // truncated at forty, so twenty-three servers tie at the ceiling. Neither
-    // number can order this row. Rather than invent a ranking out of ties -
-    // which is exactly what this market exists not to do - it shows the
-    // best-stocked server from each of the busiest categories. That is a real
-    // fact about the catalogue, and it tells a visitor what Earth covers.
+    // There is finally an honest number to sort on. Adoption wins whenever
+    // Earth has recorded any, because installs are first-hand evidence; when
+    // it has none, maintenance takes over - freshness, hands on the project,
+    // whether it is installable, whether it says what licence it is under.
+    // Never stars. The row says which basis it used rather than leaving a
+    // reader to assume the flattering one.
     const anyAdoption = servers.some((row) => row.pulls > 0);
+    const scored = servers.filter((row) => typeof row.maintenanceScore === 'number');
+    const byKept = (list) => [...list].sort((left, right) =>
+      (right.maintenanceScore ?? -1) - (left.maintenanceScore ?? -1) || byName(left, right));
     const oneFromEachCorner = (list) => {
       const bins = new Map();
       for (const row of byTools(list)) {
@@ -579,13 +606,18 @@
         more: 'verified',
       }),
       shelfBlock({
-        title: anyAdoption ? 'MOST ADOPTED MCP SERVERS' : 'MCP SERVERS · ONE FROM EACH CORNER',
+        title: anyAdoption ? 'MOST ADOPTED MCP SERVERS'
+          : scored.length ? 'BEST KEPT MCP SERVERS' : 'MCP SERVERS · ONE FROM EACH CORNER',
         why: anyAdoption
           ? 'Ranked by installs Earth actually recorded. There is no paid placement to buy.'
-          : 'Nothing has been installed through Earth yet, and this market will not invent a ranking '
-            + 'to fill the gap. So: the best-stocked server from each of the busiest categories. '
-            + 'The moment real installs exist, this row ranks by them.',
-        rows: anyAdoption ? byRank(servers) : oneFromEachCorner(servers),
+          : scored.length
+            ? 'Nothing has been installed through Earth yet, so these are ranked by how well kept they are: '
+              + 'when the repository was last touched, how many people work on it, whether it is actually '
+              + 'installable, whether it declares a licence. Never by stars — measured while building this, '
+              + 'one project carried 12,300 stars on 88 commits from six people.'
+            : 'Nothing has been installed through Earth yet, and this market will not invent a ranking '
+              + 'to fill the gap. So: the best-stocked server from each of the busiest categories.',
+        rows: anyAdoption ? byRank(servers) : scored.length ? byKept(scored) : oneFromEachCorner(servers),
         more: 'mcp',
         moreLabel: 'ALL SERVERS',
       }),
@@ -981,6 +1013,9 @@
           capabilities: server.capabilities || [],
           toolCount: server.toolCount || 0,
           transport: server.transport,
+          maintenanceScore: server.maintenanceScore ?? null,
+          maintenance: server.maintenance ?? null,
+          repository: server.repository ?? null,
         }));
       }
     } catch { mcpServers = []; }
