@@ -1,8 +1,11 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const html = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
-const scripts = [...html.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/gi)].map((match) => match[1]).filter(Boolean);
-for (const source of scripts) new Function(source);
+const scripts = [...html.matchAll(/<script(\s[^>]*)?>([\s\S]*?)<\/script>/gi)].filter((match) => match[2].trim());
+for (const [, attributes = '', source] of scripts) {
+  if (/type\s*=\s*['"]application\/ld\+json['"]/i.test(attributes)) JSON.parse(source);
+  else new Function(source);
+}
 if (/localStorage\.getItem\(['"]earthAuth|localStorage\.setItem\(['"]earthAuth/.test(html)) {
   throw new Error('authoritative owner authentication must never use localStorage');
 }
@@ -27,7 +30,7 @@ if (!html.includes('id="agentInstallPrompt"') || !html.includes('id="copyAgentPr
 if (html.includes('earth-world.vercel.app/?embed=1" title="AgentsEarth live world"')) {
   throw new Error('the primary world embed must use the custom production domain');
 }
-if (!html.includes('id="btnFindMe"') || !html.includes("type:'earth-focus-agent'")) {
+if (!(html.includes('id="btnFindMe"') || html.includes('find.onclick = () => focusOwnerInWorld()')) || !html.includes("type:'earth-focus-agent'")) {
   throw new Error('the owner dashboard must expose and wire the signed find-me control');
 }
 if (!html.includes('SIGNED AGENT DETAILS') || !html.includes('agent-badges') || !html.includes('p.rank?.score')) {

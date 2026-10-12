@@ -1,2 +1,3 @@
 .vercel
 kit/.env.local
+.env*

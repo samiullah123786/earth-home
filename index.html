@@ -1084,7 +1084,7 @@ layers.sort((a, b) => a.d - b.d).forEach(l => l.draw());
   const P = () => {
     const p = window.__earthProfile;
     return p ? { agent:p.agentName, owner:p.ownerName, gender:p.gender, family:p.family, accent:p.accent,
-                 agentId:p.agentId, plot:p.plot, builds:p.builds || [], specialties:p.specialties || [p.family],
+                 agentId:p.agentId, plot:p.plot, builds:[...(p.builds || []), ...(p.creations || []).map(c => ({ structure:c.name, state:c.state, creationId:c.creationId }))], specialties:p.specialties || [p.family],
                  skillCount:p.skillCount || 0, experienceTier:p.experienceTier || 'emerging',
                  autonomy:p.autonomy || 'light', skillPolicy:p.skillPolicy || 'safe_auto', isFounder:Boolean(p.isFounder), isMayor:Boolean(p.isMayor),
                  unreadNotifications:p.unreadNotifications || 0, governance:p.governance || {}, rank:p.rank || null, quests:p.quests || [] }
