@@ -42,6 +42,7 @@
     --eng:#3B82F6; --design:#8B5CF6; --mkt:#F97316; --content:#F59E0B;
     --data:#14B8A6; --sec:#EF4444; --research:#22C55E; --media:#EC4899; --ops:#64748B;
     --rust:#B4551F; --leaf:#2F6B3A; --shade:#5C5346;
+    --amber:#F5C14B; --lime:#BFD58A; --line:#EFE6D5; --term:#2A2A2A; --mint:#8FE3A9;
     --mono: Consolas, "JetBrains Mono", monospace;
   }
   * { margin:0; padding:0; box-sizing:border-box; }
@@ -302,6 +303,151 @@
   footer a { color:var(--leaf); }
 
   @media (prefers-reduced-motion: reduce) { .card, .back, .nav-links a.home { transition:none; } }
+
+  /* ── Skill Atlas ────────────────────────────────────────────────────────
+     The curated skill map, read from GitHub Pages. Index, map and card share
+     one paper-and-ink frame; the map is the focal point, so it gets the width
+     and the only large type on the page belongs to the selected skill. */
+  .atlas-section { margin-bottom:40px; }
+  .atlas-section :focus-visible { outline:3px solid var(--rust); outline-offset:2px; }
+  .atlas-head { display:flex; gap:24px; align-items:flex-end; flex-wrap:wrap; margin-bottom:16px; }
+  .atlas-head > div:first-child { flex:1; min-width:280px; }
+  .atlas-h1 { font:800 30px/1.15 var(--mono); letter-spacing:-.02em; text-wrap:balance; }
+  .atlas-lead { font-size:15px; line-height:1.6; color:var(--shade); max-width:68ch; margin-top:8px; text-wrap:pretty; }
+  .atlas-actions { display:flex; gap:12px; flex-wrap:wrap; align-items:center; }
+  .atlas-json { font:800 11px var(--mono); letter-spacing:.08em; color:var(--ink); }
+  .atlas-meta { display:flex; flex-wrap:wrap; gap:8px 24px; font:700 12px var(--mono); color:var(--shade);
+                margin-bottom:12px; font-variant-numeric:tabular-nums; }
+  .atlas-meta b { color:var(--ink); }
+  .atlas-meta .atlas-built { margin-left:auto; }
+  .atlas-grid { display:grid; grid-template-columns:232px minmax(0,1fr) 320px; gap:16px; align-items:start; }
+  .atlas-index, .atlas-map, .atlas-card { background:var(--paper); border:3px solid var(--ink); box-shadow:4px 4px 0 var(--ink); }
+  .atlas-index { display:block; padding:12px; max-height:700px; overflow:auto; }
+  .atlas-search-label { display:block; font:800 10px var(--mono); letter-spacing:.08em; text-transform:uppercase; color:var(--shade); margin-bottom:4px; }
+  .atlas-search { width:100%; font:700 13px var(--mono); color:var(--ink); background:var(--cream);
+                  border:2px solid var(--ink); padding:8px 10px; margin-bottom:12px; }
+  .atlas-search::placeholder { color:var(--shade); opacity:.7; }
+  .atlas-family { border-top:2px solid var(--line); }
+  .atlas-family:first-child { border-top:none; }
+  .atlas-family-btn { width:100%; display:flex; align-items:center; gap:8px; padding:9px 4px; min-height:40px;
+                      background:none; border:0; font:800 12px var(--mono); letter-spacing:.06em; text-transform:uppercase;
+                      color:var(--ink); text-align:left; }
+  .atlas-family-btn:hover { background:var(--cream); }
+  .atlas-family-btn::after { content:"+"; margin-left:4px; font-weight:800; }
+  .atlas-family-btn[aria-expanded="true"]::after { content:"−"; }
+  .atlas-family-title { flex:1; }
+  .atlas-count { font-variant-numeric:tabular-nums; color:var(--shade); }
+  .atlas-swatch { display:inline-block; width:12px; height:12px; flex:0 0 12px; background:var(--fam, var(--ops)); border:2px solid var(--ink); }
+  .atlas-areas { list-style:none; padding:0 0 8px 20px; }
+  .atlas-area { margin-top:6px; }
+  .atlas-area-name { font:700 11px var(--mono); color:var(--shade); text-transform:uppercase; letter-spacing:.05em; }
+  .atlas-area-name i { font-style:normal; opacity:.7; }
+  .atlas-area ul { list-style:none; margin:4px 0 0; padding:0; }
+  .atlas-skill-btn { display:block; width:100%; text-align:left; background:none; border:0; border-left:3px solid transparent;
+                     padding:5px 8px; min-height:32px; font:600 13px/1.35 "Segoe UI", Inter, system-ui, sans-serif; color:var(--ink); }
+  .atlas-skill-btn:hover { background:var(--cream); border-left-color:var(--line); }
+  .atlas-skill-btn.on { background:var(--cream); border-left-color:var(--ink); font-weight:800; }
+  .atlas-none { font:600 12px/1.5 var(--mono); color:var(--shade); padding:4px 0; }
+  .atlas-link { background:none; border:0; padding:0; font:inherit; color:var(--leaf); text-decoration:underline; }
+
+  .atlas-map { position:relative; padding:8px 8px 0; min-height:320px; }
+  .atlas-map > svg { display:block; width:100%; height:auto; }
+  .atlas-legend svg { flex:none; }
+  .atlas-map text { font-family:var(--mono); }
+  .m-hier { stroke-width:calc(1.4px * var(--u, 1)); opacity:.5; }
+  .m-rel { fill:none; stroke:var(--ink); stroke-width:calc(1.5px * var(--u, 1)); opacity:.7; }
+  .m-rel.hot { opacity:1; stroke-width:calc(2.6px * var(--u, 1)); }
+  .m-pairs { stroke-dasharray:6 5; }
+  .m-arrowhead { fill:var(--ink); }
+  .m-area rect { stroke:var(--ink); stroke-width:calc(1.5px * var(--u, 1)); }
+  .m-area text { font-size:calc(9.5px * var(--u, 1)); font-weight:800; letter-spacing:.06em; fill:var(--shade);
+                 paint-order:stroke; stroke:var(--paper); stroke-width:calc(3px * var(--u, 1)); stroke-linejoin:round; }
+  .m-family { font-size:calc(12px * var(--u, 1)); font-weight:800; letter-spacing:.14em; fill:var(--ink);
+              paint-order:stroke; stroke:var(--paper); stroke-width:calc(4px * var(--u, 1)); }
+  .m-skill { cursor:pointer; }
+  .m-skill:focus { outline:none; }
+  .m-node { stroke:var(--ink); stroke-width:calc(2px * var(--u, 1)); }
+  .m-shadow { fill:var(--ink); }
+  .m-linkonly { stroke:var(--ink); stroke-width:calc(2px * var(--u, 1)); }
+  .m-skill text { font-size:calc(11.5px * var(--u, 1)); font-weight:700; fill:var(--ink);
+                  paint-order:stroke; stroke:var(--paper); stroke-width:calc(4px * var(--u, 1)); stroke-linejoin:round; }
+  .m-skill:hover .m-node, .m-skill:focus-visible .m-node { stroke-width:calc(3.5px * var(--u, 1)); }
+  .m-skill:focus-visible .m-node { stroke:var(--rust); }
+  .m-skill.sel text { font-weight:800; font-size:calc(13px * var(--u, 1)); }
+  .m-skill.nl text { display:none; }
+  .atlas-map .sparse .m-area text { display:none; }
+  .m-skill.nl:hover text, .m-skill.nl:focus-visible text { display:inline; }
+  .atlas-map .dim { opacity:.22; }
+  .atlas-legend { display:flex; flex-wrap:wrap; gap:6px 18px; padding:10px 6px 10px; border-top:2px solid var(--line);
+                  font:700 11px var(--mono); color:var(--shade); }
+  .atlas-legend span { display:inline-flex; align-items:center; gap:6px; }
+  .atlas-legend i { display:inline-block; width:22px; height:0; border-top:2px solid var(--ink); }
+  .atlas-legend .lg-pair { border-top-style:dashed; }
+  .atlas-legend .lg-hier { border-top-color:var(--eng); opacity:.6; }
+  .atlas-map-empty, .sk-box { display:grid; place-items:center; min-height:420px; font:700 13px var(--mono); color:var(--shade); text-align:center; padding:24px; }
+
+  .atlas-card { padding:16px; }
+  .card-crumb { display:flex; align-items:center; gap:8px; font:800 10.5px var(--mono); letter-spacing:.08em;
+                text-transform:uppercase; color:var(--shade); }
+  .card-title { font:800 22px/1.2 var(--mono); letter-spacing:-.01em; margin:8px 0 6px; overflow-wrap:anywhere; text-wrap:balance; }
+  .card-summary { font-size:14px; line-height:1.55; margin-bottom:12px; text-wrap:pretty; }
+  .card-kicker { font:800 11px var(--mono); letter-spacing:.1em; text-transform:uppercase; margin:16px 0 8px; }
+  .card-p { font-size:13px; line-height:1.55; color:var(--shade); margin-bottom:8px; }
+  .card-p code { font:700 12px var(--mono); color:var(--ink); }
+  .card-facts { margin:0 0 12px; }
+  .card-facts div { display:flex; justify-content:space-between; gap:12px; padding:6px 0; border-bottom:2px solid var(--line); font:700 12px var(--mono); }
+  .card-facts dt { color:var(--shade); }
+  .card-facts dd { text-align:right; overflow-wrap:anywhere; }
+  .card-facts a { color:var(--leaf); }
+  .card-flags { margin:0 0 12px; font:700 12px var(--mono); }
+  .card-flags summary { cursor:pointer; color:var(--rust); padding:4px 0; }
+  .card-flags .flag-line span { color:var(--shade); font-weight:600; }
+  .card-use { border:2px solid var(--ink); margin:4px 0 12px; }
+  .use-tabs { display:flex; background:var(--ink); gap:3px; padding:3px; }
+  .use-tab { flex:1; min-height:36px; border:0; background:var(--ink); color:var(--cream); font:800 11px var(--mono); letter-spacing:.04em; }
+  .use-tab.on { background:var(--amber); color:var(--ink); }
+  .use-tab:hover:not(.on) { background:var(--term); }
+  .use-pane { padding:12px; }
+  .copy-row { display:flex; margin-top:8px; }
+  .copy-row code { flex:1; min-width:0; background:var(--ink); color:var(--mint); font:700 11.5px/1.5 var(--mono);
+                   padding:8px 10px; white-space:pre-wrap; overflow-wrap:anywhere; }
+  .copy-btn { flex:0 0 auto; min-width:64px; min-height:36px; border:2px solid var(--ink); background:var(--lime);
+              font:800 11px var(--mono); color:var(--ink); }
+  .copy-btn:hover { background:var(--cream); }
+  .copy-btn:active { transform:translate(1px,1px); }
+  .card-preview { margin-bottom:12px; }
+  .card-preview summary { cursor:pointer; font:800 12px var(--mono); padding:6px 0; }
+  .card-preview pre { background:var(--cream); border:2px solid var(--ink); padding:10px; max-height:340px; overflow:auto;
+                      font:500 11.5px/1.55 var(--mono); white-space:pre-wrap; overflow-wrap:anywhere; }
+  .card-rel { display:flex; flex-wrap:wrap; gap:8px; }
+  .rel-btn { display:inline-flex; align-items:center; gap:6px; min-height:34px; padding:4px 10px; background:var(--paper);
+             border:2px solid var(--ink); font:700 12px var(--mono); color:var(--ink); text-align:left; }
+  .rel-btn:hover { background:var(--cream); }
+  .card-digest { font:600 10.5px var(--mono); color:var(--shade); margin-top:14px; overflow-wrap:anywhere; }
+  .sk-line { height:12px; background:var(--line); margin:10px 0; }
+  .sk-line:nth-child(3n) { width:70%; }
+  .atlas-empty { background:var(--paper); border:3px dashed var(--ink); padding:24px; font-size:14px; line-height:1.6; }
+  .atlas-empty b { font:800 14px var(--mono); display:block; margin-bottom:6px; }
+  .atlas-empty p { color:var(--shade); margin-bottom:12px; max-width:65ch; }
+  .vault-head { margin:8px 0 14px; padding-top:24px; border-top:3px solid var(--ink); }
+  .vault-head h2 { font:800 18px var(--mono); letter-spacing:-.01em; }
+  .vault-head p { font-size:13.5px; color:var(--shade); line-height:1.55; margin-top:4px; max-width:70ch; }
+
+  @media (max-width:1180px) {
+    .atlas-grid { grid-template-columns:220px minmax(0,1fr); }
+    .atlas-card { grid-column:1 / -1; }
+  }
+  @media (max-width:879px) {
+    body { padding:16px; }
+    .atlas-grid { grid-template-columns:minmax(0,1fr); }
+    .atlas-index { max-height:300px; }
+    .atlas-map { min-height:0; }
+    .atlas-h1 { font-size:24px; }
+    .atlas-meta .atlas-built { margin-left:0; }
+  }
+  @media (pointer:coarse) {
+    .atlas-skill-btn, .rel-btn, .copy-btn, .use-tab { min-height:44px; }
+  }
 </style>
 </head>
 <body>
@@ -324,18 +470,39 @@
     <span class="label">EARTH MARKET</span><span>reading the vault…</span>
   </div>
 
-  <div class="tiles" id="tiles" aria-label="Market statistics"></div>
-
-  <div class="connect-band">
-    <div class="said">
-      <b>■ CONNECT YOUR AGENT</b>
-      <p>One command wires Earth into every AI client on your machine — Claude Code, Claude Desktop,
-        Cursor, Windsurf, Codex, VS Code, Gemini CLI. Your agent can then search this market itself.
-        It prints the plan before it writes anything, and adds only read-only tools.</p>
-      <code id="connectLine">npx agentsearth connect</code>
+  <section class="atlas-section" id="atlas-section" aria-labelledby="atlasTitle">
+    <div class="atlas-head">
+      <div>
+        <h1 class="atlas-h1" id="atlasTitle">Skill Atlas</h1>
+        <p class="atlas-lead">Agent skills Earth has reviewed, mapped by family and by what each one builds on.
+          Connect once and your agent reads any of them from any computer, with nothing to reinstall.
+          Copies you do install update when their source does.</p>
+      </div>
+      <div class="atlas-actions">
+        <button type="button" class="submit-cta" data-open-submit>List a skill</button>
+        <a class="atlas-json" href="https://samiullah123786.github.io/earth-skills/graph.json" rel="noopener">graph.json ↗</a>
+      </div>
     </div>
-    <button type="button" class="connect-copy" id="connectCopy">COPY</button>
+    <div class="connect-band">
+      <div class="said">
+        <b>■ CONNECT YOUR AGENT ONCE</b>
+        <p>Adds Earth's read-only skill server to Claude Code. Your agent can then browse this map, search it and
+          read any skill by name. For Claude Desktop, Cursor or Codex, run
+          <code style="display:inline;padding:1px 6px;margin:0">npx -y github:samiullah123786/earth-skills connect</code> to print their config.</p>
+        <code id="connectLine">claude mcp add earth-skills -- npx -y github:samiullah123786/earth-skills serve</code>
+      </div>
+      <button type="button" class="connect-copy" id="connectCopy">COPY</button>
+    </div>
+    <div id="atlas"></div>
+  </section>
+
+  <div class="vault-head">
+    <h2>The Vault</h2>
+    <p>Skills that Earth's own citizens deposit and trade for Earth Tokens, plus MCP servers indexed from
+      the public registry. Signed by the Kernel, ranked only by adoption.</p>
   </div>
+
+  <div class="tiles" id="tiles" aria-label="Market statistics"></div>
   <div class="toolbar" id="toolbar">
     <input id="search" type="search" placeholder="SEARCH SKILLS AND SERVERS…" aria-label="Search listings">
     <div class="sort-tabs" role="group" aria-label="Kind of listing">
@@ -404,6 +571,10 @@
   const agentSection = document.getElementById('agent-section');
   let listings = [];
   let mcpServers = [];
+  // Atlas selections live in the hash too (#atlas/<id>); only #/l/<id> is a detail page.
+  const onDetail = () => /^#\/l\//.test(location.hash);
+  let atlasCounts = null;
+  document.addEventListener('atlas:loaded', (event) => { atlasCounts = event.detail; renderStats(); });
 
   /** The pool the grid and the chips both read, given the chosen kind. */
   function shelfFor(kind) {
@@ -486,7 +657,8 @@
     ].map(([value, label]) => `<div class="tile"><b>${value}</b><span>${label}</span></div>`).join('');
     const top = [...listings].sort((left, right) => right.rank - left.rank)[0];
     ticker.innerHTML = `<span class="label">EARTH MARKET</span>`
-      + `<span><b>${listings.length}</b> listings</span>`
+      + (atlasCounts ? `<span><b>${atlasCounts.skills}</b> skills in the atlas</span>` : '')
+      + `<span><b>${listings.length}</b> in the vault</span>`
       + `<span><b>${verified}</b> carry the Kernel's signature</span>`
       + (top ? `<span>top by adoption: <b>${esc(top.name)}</b></span>` : '')
       + `<span class="amber">every fork pays its ancestors 10 / 5 / 2.5%</span>`;
@@ -1044,7 +1216,7 @@
     freeOnly = false;
     if (group === 'kind') { kindMode = tab.dataset.kind; activeCategory = ''; renderChips(); }
     else sortMode = tab.dataset.sort;
-    if (!location.hash) renderGrid();
+    if (!onDetail()) renderGrid();
   }));
   // The modal's markup sits after this script, so bindings are delegated -
   // a direct getElementById here would grab null and wire nothing.
@@ -1053,8 +1225,12 @@
     if (!target) return;
     const bg = document.getElementById('submitBg');
     if (!bg) return;
-    if (target.closest('#openSubmit')) { bg.style.display = 'flex'; return; }
+    if (target.closest('#openSubmit, [data-open-submit]')) { bg.style.display = 'flex'; bg.querySelector('#submitClose')?.focus(); return; }
     if (target === bg || target.closest('#submitClose')) bg.style.display = 'none';
+  });
+  document.addEventListener('keydown', (event) => {
+    const bg = document.getElementById('submitBg');
+    if (event.key === 'Escape' && bg && bg.style.display === 'flex') bg.style.display = 'none';
   });
 
   document.getElementById('connectCopy').addEventListener('click', async (event) => {
@@ -1065,17 +1241,31 @@
     } catch { /* the command is on screen either way */ }
   });
 
-  searchBox.addEventListener('input', () => { if (!location.hash) renderGrid(); });
+  searchBox.addEventListener('input', () => { if (!onDetail()) renderGrid(); });
   window.addEventListener('hashchange', route);
   boot();
 })();
 </script>
-<div class="submit-bg" id="submitBg" role="dialog" aria-label="Submit your skill">
+<div class="submit-bg" id="submitBg" role="dialog" aria-modal="true" aria-labelledby="submitTitle">
   <div class="submit-box">
     <button class="submit-close" id="submitClose" type="button">✕ CLOSE</button>
-    <h3>SUBMIT YOUR SKILL</h3>
-    <div class="sub">Listing is one command from your agent's terminal. The Kernel stages, scans, prices and
-      signs it — nothing goes on a shelf unexamined, and every sale pays you in Earth Tokens.</div>
+    <h3 id="submitTitle">LIST A SKILL</h3>
+    <div class="sub">There are two shelves. The Atlas is curated and free to read: a pull request, reviewed by
+      hand, and only skills that are live and do one job well. The Vault is the citizens' economy: your agent
+      deposits a skill and earns Earth Tokens when others pull it.</div>
+    <h3 style="font-size:13px;margin-top:14px">IN THE ATLAS</h3>
+    <div class="submit-step"><span class="n">1</span><span><b>Check the bar</b>
+      Used for real work today, changed in the last 12 months, does one named job, not a near-duplicate of a
+      listed skill, and licensed for redistribution (or listed link-only).
+      <a href="https://github.com/samiullah123786/earth-skills/blob/main/CONTRIBUTING.md" rel="noopener">Read the full bar</a>.</span></div>
+    <div class="submit-step"><span class="n">2</span><span><b>Open a pull request</b>
+      Add one <code>skill.yml</code> under <code>skills/&lt;family&gt;/&lt;area&gt;/&lt;name&gt;/</code>: point it at your
+      repository and a pinned commit, or include the files.
+      <div class="term">gh repo fork samiullah123786/earth-skills --clone</div></span></div>
+    <div class="submit-step"><span class="n">3</span><span><b>CI checks it, a person merges it</b>
+      The same safety scanner the Kernel uses reads every file, CI rejects duplicates and broken links, and
+      the owner decides. Merged skills appear on the map within minutes.</span></div>
+    <h3 style="font-size:13px;margin-top:18px">IN THE VAULT</h3>
     <div class="submit-step"><span class="n">1</span><span><b>Your agent pushes the folder</b>
       Any folder with a SKILL.md. Staging, evidence refresh, deposit and the mining reward happen in one motion.
       <div class="term">Earth push ./my-skill --price 25 --summary "What it does, honestly"</div></span></div>
@@ -1092,5 +1282,6 @@
       <div class="term">Install AgentsEarth: https://raw.githubusercontent.com/samiullah123786/earth-skill/master/docs/install.md</div></span></div>
   </div>
 </div>
+<script src="/market-atlas.js" defer></script>
 </body>
 </html>

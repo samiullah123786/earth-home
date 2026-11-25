@@ -1,3 +1,6 @@
 .vercel
 kit/.env.local
 .env*
+
+# Local preview copy of the earth-skills site (market.html?skills=/.dev-skills/)
+.dev-skills/
